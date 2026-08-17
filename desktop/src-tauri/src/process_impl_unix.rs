@@ -19,11 +19,12 @@ pub fn new_command(args: &[&str]) -> Command {
 
 /// Stop the child and its whole process group. Idempotent.
 pub fn stop_child(child: &mut Option<Child>) {
-    let Some(child) = child.as_mut() else {
+    // Take ownership out of the slot so the slot is left empty and no borrow
+    // of it outlives the shutdown loop below.
+    let Some(mut child) = child.take() else {
         return;
     };
     if child.try_wait().ok().flatten().is_some() {
-        *child = None;
         return;
     }
     let pid = child.id() as i32;
@@ -33,16 +34,15 @@ pub fn stop_child(child: &mut Option<Child>) {
     let deadline = Instant::now() + STOP_GRACE;
     loop {
         if child.try_wait().ok().flatten().is_some() {
-            break;
+            return;
         }
         if Instant::now() >= deadline {
             unsafe {
                 libc::kill(-pid, libc::SIGKILL);
             }
             let _ = child.wait();
-            break;
+            return;
         }
         std::thread::sleep(Duration::from_millis(100));
     }
-    *child = None;
 }

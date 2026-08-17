@@ -22,7 +22,8 @@ pub fn new_command(args: &[&str]) -> Command {
 
 /// Kill the child and all descendants with `taskkill /T /F`. Idempotent.
 pub fn stop_child(child: &mut Option<Child>) {
-    let Some(child) = child.as_mut() else {
+    // Take ownership out of the slot so the slot is left empty.
+    let Some(mut child) = child.take() else {
         return;
     };
     let pid = child.id();
@@ -31,5 +32,4 @@ pub fn stop_child(child: &mut Option<Child>) {
         .args(["/PID", pid_arg.as_str(), "/T", "/F"])
         .status();
     let _ = child.wait();
-    *child = None;
 }
