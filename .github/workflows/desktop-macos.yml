@@ -38,10 +38,16 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
 
       - name: Generate app icons
-        # Rasterize the committed SVG with resvg, then emit every platform
+        # Rasterize the committed SVG with resvg-js, then emit every platform
         # icon (icns/png/ico) into desktop/src-tauri/icons.
         run: |
-          npx --yes @resvg/resvg-js desktop/assets/app-icon.svg desktop/assets/app-icon-1024.png
+          npx -y -p @resvg/resvg-js@2 -- node -e "
+            const { Resvg } = require('@resvg/resvg-js');
+            const fs = require('fs');
+            const svg = fs.readFileSync('desktop/assets/app-icon.svg', 'utf8');
+            const png = new Resvg(svg, { fitTo: { mode: 'width', value: 1024 } }).render().asPng();
+            fs.writeFileSync('desktop/assets/app-icon-1024.png', png);
+          "
           npx --yes @tauri-apps/cli@2 icon desktop/assets/app-icon-1024.png -o desktop/src-tauri/icons
 
       - name: Build the desktop app
