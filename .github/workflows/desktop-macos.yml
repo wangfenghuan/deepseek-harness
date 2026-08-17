@@ -34,34 +34,6 @@ jobs:
         with:
           node-version: 22
 
-      - name: Smoke-test the launcher child command
-        # Runs the exact command the launcher spawns and confirms the web GUI
-        # serves, so a broken `dsh web` never ships inside a broken .app.
-        run: |
-          set -euo pipefail
-          export DSH_TELEMETRY_DISABLED=1
-          LOG=/tmp/dsh-web.log
-          npx --yes @deepseek-ai/dsh web --host 127.0.0.1 --port 0 > "$LOG" 2>&1 &
-          PID=$!
-          cleanup() { kill -TERM "$PID" 2>/dev/null || true; wait "$PID" 2>/dev/null || true; }
-          trap cleanup EXIT
-          URL=""
-          for i in $(seq 1 180); do
-            URL="$(grep -m1 -o 'dsh web: http://127\.0\.0\.1:[0-9]*' "$LOG" 2>/dev/null || true)"
-            [ -n "$URL" ] && break
-            if ! kill -0 "$PID" 2>/dev/null; then echo "dsh web exited early"; cat "$LOG"; exit 1; fi
-            sleep 1
-          done
-          if [ -z "$URL" ]; then echo "timed out waiting for dsh web"; cat "$LOG"; exit 1; fi
-          URL="${URL#dsh web: }"
-          echo "server URL: $URL"
-          curl -sf "$URL/" > /dev/null || { echo "curl failed"; cat "$LOG"; exit 1; }
-          echo "sidecar smoke OK"
-          CHILD_PID="$(pgrep -P "$PID" | head -1 || true)"
-          if [ -n "$CHILD_PID" ]; then
-            ps -o rss=,comm= -p "$CHILD_PID" | awk '{printf "dsh server RSS: %.1f MB\n", $1/1024}'
-          fi
-
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
 

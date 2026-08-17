@@ -24,7 +24,7 @@ The launcher wraps the already-installed dsh CLI — it does **not** bundle Node
 
 ### GitHub Actions (CI)
 
-[`.github/workflows/desktop-macos.yml`](../.github/workflows/desktop-macos.yml) builds `DeepSeek Harness.app` and the `.dmg` on `macos-15` (Apple Silicon) on every push to the default branch and on `v*` tags, uploads the artifacts, and creates a GitHub Release with the `.dmg` for tags. Before the Tauri build it smoke-tests the exact child command: it starts `npx --yes @deepseek-ai/dsh web --port 0`, greps the readiness line, and curls the URL.
+[`.github/workflows/desktop-macos.yml`](../.github/workflows/desktop-macos.yml) builds `DeepSeek Harness.app` and the `.dmg` on `macos-15` (Apple Silicon) on every push to the default branch and on `v*` tags, uploads the artifacts, and creates a GitHub Release with the `.dmg` for tags.
 
 ### Locally
 
@@ -50,7 +50,7 @@ open src-tauri/target/release/bundle/macos/*.app
 ## Sizes
 
 - `.app`: about 50–100 MB (no bundled runtime).
-- Runtime: about 300–700 MB (Node dsh server plus the WebView), measured and printed in the CI smoke step.
+- Runtime: about 300–700 MB (Node dsh server plus the WebView).
 
 ## Troubleshooting
 

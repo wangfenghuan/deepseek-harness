@@ -24,7 +24,7 @@
 
 ### GitHub Actions（CI）
 
-[`.github/workflows/desktop-macos.yml`](../.github/workflows/desktop-macos.yml) 在 `macos-15`（Apple Silicon）上构建 `DeepSeek Harness.app` 与 `.dmg`：每次推送到默认分支以及打 `v*` 标签时触发，上传产物；打标签时还会创建含 `.dmg` 的 GitHub Release。Tauri 构建之前会先冒烟测试启动器的子命令：启动 `npx --yes @deepseek-ai/dsh web --port 0`，抓取就绪行并 curl 通。
+[`.github/workflows/desktop-macos.yml`](../.github/workflows/desktop-macos.yml) 在 `macos-15`（Apple Silicon）上构建 `DeepSeek Harness.app` 与 `.dmg`：每次推送到默认分支以及打 `v*` 标签时触发，上传产物；打标签时还会创建含 `.dmg` 的 GitHub Release。
 
 ### 本地构建
 
