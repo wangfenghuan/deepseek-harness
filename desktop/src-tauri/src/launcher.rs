@@ -153,12 +153,12 @@ impl Launcher {
     /// Snapshot for the `server_info` command.
     pub fn status(&self) -> ServerStatus {
         let shared = self.shared.lock().expect("shared lock");
-        let child = self.child.lock().expect("child lock");
+        let mut child = self.child.lock().expect("child lock");
         ServerStatus {
             url: shared.ready_url.clone(),
             pid: child.as_ref().map(Child::id),
             running: child
-                .as_ref()
+                .as_mut()
                 .map(|child| child.try_wait().ok().flatten().is_none())
                 .unwrap_or(false),
             lines: shared.lines.clone(),
@@ -189,6 +189,13 @@ fn spawn_reader<R: BufRead + Send + 'static>(reader: R, shared: Arc<Mutex<Shared
         for line in reader.lines() {
             let Ok(line) = line else { break };
             let mut shared = shared.lock().expect("shared lock");
+            // Parse the URL from the raw line *before* moving its value into the
+            // prefixed form, since extract_url borrows the original string.
+            if !is_stderr {
+                if let Some(url) = extract_url(&line) {
+                    shared.ready_url = Some(url);
+                }
+            }
             let prefixed = if is_stderr {
                 format!("[stderr] {line}")
             } else {
@@ -198,11 +205,6 @@ fn spawn_reader<R: BufRead + Send + 'static>(reader: R, shared: Arc<Mutex<Shared
             if shared.lines.len() > LOG_CAPACITY {
                 let excess = shared.lines.len() - LOG_CAPACITY;
                 shared.lines.drain(..excess);
-            }
-            if !is_stderr {
-                if let Some(url) = extract_url(&line) {
-                    shared.ready_url = Some(url);
-                }
             }
         }
     });
