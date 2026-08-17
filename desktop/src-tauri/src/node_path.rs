@@ -7,7 +7,9 @@
 //! the full user `PATH`, so the inherited value is used as-is there.
 
 use std::env;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
+#[cfg(not(windows))]
+use std::path::Path;
 
 #[cfg(not(windows))]
 const PATH_SEPARATOR: char = ':';
