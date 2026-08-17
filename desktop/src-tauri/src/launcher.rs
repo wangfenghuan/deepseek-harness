@@ -1,19 +1,26 @@
 //! Sidecar process management: spawn `npx @deepseek-ai/dsh web` as a child,
-//! wait for its readiness line, and recycle the whole process group on exit.
+//! wait for its readiness line, and recycle the whole process tree on exit.
 
 use std::io::{BufRead, BufReader};
-use std::path::PathBuf;
 use std::process::{Child, Command, Stdio};
 use std::sync::{Arc, Mutex};
-use std::time::{Duration, Instant};
+use std::time::Duration;
+
+#[cfg(unix)]
+mod process_impl_unix;
+#[cfg(windows)]
+mod process_impl_windows;
+
+#[cfg(unix)]
+use process_impl_unix as process_impl;
+#[cfg(windows)]
+use process_impl_windows as process_impl;
 
 /// The CLI prints this readiness line on stdout once the web server is
 /// listening (`printUrl` defaults on). The OS-assigned port is read from it.
 const READY_PREFIX: &str = "dsh web: http://";
 /// Ring-buffer cap for captured child output.
 const LOG_CAPACITY: usize = 1000;
-/// Grace period between SIGTERM and SIGKILL on shutdown.
-const STOP_GRACE: Duration = Duration::from_secs(5);
 
 /// Child output and readiness, shared between the reader threads and callers.
 #[derive(Default)]
@@ -45,35 +52,27 @@ impl Launcher {
         }
     }
 
-    /// Spawn `npx --yes @deepseek-ai/dsh web --host 127.0.0.1 --port 0` in its
-    /// own process group with the given `PATH`, cwd `$HOME`, and telemetry off.
-    pub fn start(&self, path: &[PathBuf]) -> Result<(), String> {
-        let path_string = path
-            .iter()
-            .map(|dir| dir.display().to_string())
-            .collect::<Vec<_>>()
-            .join(":");
+    /// Spawn the dsh web server (`npx --yes @deepseek-ai/dsh web --host
+    /// 127.0.0.1 --port 0`) as a child with the given `PATH`, cwd set to the
+    /// user's home, and telemetry off.
+    pub fn start(&self, path: &str) -> Result<(), String> {
+        let args = [
+            "--yes",
+            "@deepseek-ai/dsh",
+            "web",
+            "--host",
+            "127.0.0.1",
+            "--port",
+            "0",
+        ];
         let cwd = env_home();
-        let mut command = Command::new("npx");
+        let mut command = process_impl::new_command(&args);
         command
-            .args([
-                "--yes",
-                "@deepseek-ai/dsh",
-                "web",
-                "--host",
-                "127.0.0.1",
-                "--port",
-                "0",
-            ])
             .current_dir(&cwd)
-            .env("PATH", &path_string)
+            .env("PATH", path)
             .env("DSH_TELEMETRY_DISABLED", "1")
             .stdout(Stdio::piped())
             .stderr(Stdio::piped());
-        // Own process group so shutdown can recycle npx, dsh, and any agents it
-        // spawned with one signal.
-        use std::os::unix::process::CommandExt;
-        command.process_group(0);
         let mut child = command
             .spawn()
             .map_err(|error| format!("failed to spawn npx: {error}"))?;
@@ -88,7 +87,7 @@ impl Launcher {
     /// Block until the dsh web readiness line appears, the child exits early,
     /// or `timeout` elapses. Returns the served URL.
     pub fn wait_ready(&self, timeout: Duration) -> Result<String, String> {
-        let deadline = Instant::now() + timeout;
+        let deadline = std::time::Instant::now() + timeout;
         loop {
             if let Some(url) = self.shared.lock().expect("shared lock").ready_url.clone() {
                 return Ok(url);
@@ -99,7 +98,7 @@ impl Launcher {
                     self.log_tail(60)
                 ));
             }
-            if Instant::now() >= deadline {
+            if std::time::Instant::now() >= deadline {
                 return Err(format!(
                     "timed out waiting for the dsh web server after {}s\n\n{}",
                     timeout.as_secs(),
@@ -110,37 +109,10 @@ impl Launcher {
         }
     }
 
-    /// Send SIGTERM to the process group, escalate to SIGKILL after the grace
-    /// period, and forget the child. Idempotent.
+    /// Recycle the child process tree. Idempotent.
     pub fn stop(&self) {
         let mut guard = self.child.lock().expect("child lock");
-        let Some(child) = guard.as_mut() else {
-            return;
-        };
-        // Already reaped: nothing left to signal.
-        if child.try_wait().ok().flatten().is_some() {
-            *guard = None;
-            return;
-        }
-        let pid = child.id() as i32;
-        unsafe {
-            libc::kill(-pid, libc::SIGTERM);
-        }
-        let deadline = Instant::now() + STOP_GRACE;
-        loop {
-            if child.try_wait().ok().flatten().is_some() {
-                break;
-            }
-            if Instant::now() >= deadline {
-                unsafe {
-                    libc::kill(-pid, libc::SIGKILL);
-                }
-                let _ = child.wait();
-                break;
-            }
-            std::thread::sleep(Duration::from_millis(100));
-        }
-        *guard = None;
+        process_impl::stop_child(&mut guard);
     }
 
     /// Last `n` captured output lines, in capture order.
@@ -176,10 +148,16 @@ impl Launcher {
     }
 }
 
-/// The user's home directory, or `/` when `HOME` is unset (never a valid state
-/// on macOS, but keeps the child spawn from failing).
+/// The user's home directory, used as the child's working directory.
 fn env_home() -> String {
-    std::env::var("HOME").unwrap_or_else(|_| "/".to_string())
+    #[cfg(windows)]
+    {
+        std::env::var("USERPROFILE").unwrap_or_else(|_| ".".to_string())
+    }
+    #[cfg(not(windows))]
+    {
+        std::env::var("HOME").unwrap_or_else(|_| "/".to_string())
+    }
 }
 
 /// Pipe one child stream into the shared log, tagging stderr lines. A read

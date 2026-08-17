@@ -19,7 +19,7 @@ pub fn run() {
         .setup(|app| {
             let launcher = Arc::new(Launcher::new());
             app.manage(launcher.clone());
-            if let Err(error) = launcher.start(&node_path::candidate_path()) {
+            if let Err(error) = launcher.start(&node_path::candidate_path_string()) {
                 status(app, &format!("启动失败：{error}\n\n请确认已安装 Node.js ≥ 22（含 npx）。"), true);
                 return Ok(());
             }
@@ -105,9 +105,11 @@ fn open_in_browser(launcher: tauri::State<'_, Arc<Launcher>>) -> Result<(), Stri
         .status()
         .url
         .ok_or_else(|| "dsh web 尚未就绪".to_string())?;
-    std::process::Command::new("open")
-        .arg(&url)
-        .status()
-        .map(|_| ())
-        .map_err(|error| error.to_string())
+    #[cfg(windows)]
+    let status = std::process::Command::new("cmd")
+        .args(["/C", "start", "", &url])
+        .status();
+    #[cfg(not(windows))]
+    let status = std::process::Command::new("open").arg(&url).status();
+    status.map(|_| ()).map_err(|error| error.to_string())
 }

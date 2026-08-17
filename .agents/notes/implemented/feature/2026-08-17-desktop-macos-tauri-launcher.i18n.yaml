@@ -2,5 +2,5 @@
 # side as of the last confirmed-consistent state. Both languages carry equal authority;
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/feature/2026-08-17-desktop-macos-tauri-launcher.md
-2026-08-17-desktop-macos-tauri-launcher.md: c0c8e15bf6b8d6545ec976c737c5ed110db2afa6
-2026-08-17-desktop-macos-tauri-launcher.zh.md: db48cee47bdac314e1b0c0f12f5ae479911b3aef
+2026-08-17-desktop-macos-tauri-launcher.md: 696c9393f026263b60cb42511840c48144717104
+2026-08-17-desktop-macos-tauri-launcher.zh.md: 946e8236eec3311811b6c62dcf00d1972b37963d

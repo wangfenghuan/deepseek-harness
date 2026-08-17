@@ -1,0 +1,89 @@
+name: Windows Desktop App
+
+# Builds the lightweight Tauri launcher ("DeepSeek Harness.exe") for Windows x64.
+# The launcher spawns `npx @deepseek-ai/dsh web` as a child process and loads
+# the served URL in a WebView2 window; see desktop/README.md for the design.
+#
+# Runs on every push to the default branch, on version tags (also publishing a
+# GitHub Release with the installer), and manually via workflow_dispatch.
+
+on:
+  push:
+    branches: [master, main]
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: desktop-windows-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build Windows app (x64)
+    runs-on: windows-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: 22
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Generate app icons
+        shell: pwsh
+        run: |
+          $iconDir = Join-Path $env:RUNNER_TEMP "resvg"
+          New-Item -ItemType Directory -Path $iconDir -Force | Out-Null
+          Push-Location $iconDir
+          npm init -y | Out-Null
+          npm install --silent @resvg/resvg-js@2 | Out-Null
+          node -e @'
+          const { Resvg } = require('@resvg/resvg-js');
+          const fs = require('fs');
+          const svg = fs.readFileSync(process.env.SVG_PATH, 'utf8');
+          const png = new Resvg(svg, { fitTo: { mode: 'width', value: 1024 } }).render().asPng();
+          fs.writeFileSync(process.env.PNG_PATH, png);
+          '@
+          Pop-Location
+          npx --yes @tauri-apps/cli@2 icon desktop/assets/app-icon-1024.png -o desktop/src-tauri/icons
+        env:
+          SVG_PATH: ${{ github.workspace }}\desktop\assets\app-icon.svg
+          PNG_PATH: ${{ github.workspace }}\desktop\assets\app-icon-1024.png
+
+      - name: Build the desktop app
+        working-directory: desktop
+        shell: pwsh
+        run: npx --yes @tauri-apps/cli@2 build
+
+      - name: Report artifact sizes
+        shell: pwsh
+        run: |
+          Get-ChildItem desktop/src-tauri/target/release/bundle -Recurse -File |
+            ForEach-Object {
+              $sizeMb = [math]::Round($_.Length / 1MB, 1)
+              Write-Output "  $($_.FullName)  ($sizeMb MB)"
+            }
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v5
+        with:
+          name: deepseek-harness-windows-x64
+          path: |
+            desktop/src-tauri/target/release/bundle/msi/*.msi
+            desktop/src-tauri/target/release/bundle/nsis/*.exe
+
+      - name: Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            desktop/src-tauri/target/release/bundle/msi/*.msi
+            desktop/src-tauri/target/release/bundle/nsis/*.exe

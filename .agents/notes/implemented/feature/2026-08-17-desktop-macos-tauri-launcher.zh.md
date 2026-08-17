@@ -1,4 +1,4 @@
-# Agent Note: macOS 桌面 Tauri 启动器
+# Agent Note: 桌面 Tauri 启动器（macOS 与 Windows）
 
 Status: implemented
 
@@ -12,10 +12,10 @@ Status: implemented
 
 在 `desktop/` 发布一个轻量 Tauri 2 启动器，包装已安装的 dsh web CLI，并保持完整的 sidecar 生命周期：
 
-- 启动时 Rust 核心探测常见 Node 位置（`/opt/homebrew/bin`、`/usr/local/bin`、nvm、volta、fnm、mise、`~/.local/bin`）并重建候选 `PATH`，因为从 Finder 启动的 GUI 应用只继承最简 `PATH`。
-- 它在独立进程组中以 `npx --yes @deepseek-ai/dsh web --host 127.0.0.1 --port 0` 启动子进程，`cwd` 设为 `$HOME`，并设置 `DSH_TELEMETRY_DISABLED=1`。不捆绑任何东西；机器上的 Node ≥ 22.19 且带 `npx` 即提供运行时。`--port 0` 让操作系统分配空闲端口。
-- GUI 是 WKWebView 窗口，先显示加载页，再导航到从 CLI 就绪行（`dsh web: http://127.0.0.1:<port>`，web profile 默认通过 `printUrl` 打印）解析出的地址。
-- 关窗或退出时，启动器向进程组发送 `SIGTERM`，5 秒后升级为 `SIGKILL`，然后忘记子进程。进程退出后端口自动释放。
+- 启动时 Rust 核心重建候选 `PATH`。从 Finder 启动的 macOS GUI 应用只继承最简 `PATH`，因此启动器探测常见 Node 位置（`/opt/homebrew/bin`、`/usr/local/bin`、nvm、volta、fnm、mise、`~/.local/bin`）；Windows GUI 应用继承完整用户 `PATH`，直接使用。
+- 它启动子进程 `npx --yes @deepseek-ai/dsh web --host 127.0.0.1 --port 0`，`cwd` 设为用户主目录，并设置 `DSH_TELEMETRY_DISABLED=1`。不捆绑任何东西；机器上的 Node ≥ 22.19 且带 `npx` 即提供运行时。`--port 0` 让操作系统分配空闲端口。
+- GUI 是 WebView 窗口，先显示加载页，再导航到从 CLI 就绪行（`dsh web: http://127.0.0.1:<port>`，web profile 默认通过 `printUrl` 打印）解析出的地址。
+- 关窗或退出时，启动器回收整个子进程树。macOS：向进程组发送 `SIGTERM`，5 秒后升级为 `SIGKILL`（子进程在独立进程组中启动，npx、dsh 及其 agent 一起退出）。Windows：`taskkill /T /F`；子进程经 `cmd /C` 且带 CREATE_NO_WINDOW 启动，因为直接 `CreateProcess` 无法解析 `npx.cmd`。进程退出后端口自动释放。
 - 更新跟随 npx：每次启动都使用当前发布的 `@deepseek-ai/dsh`。
 
 全打包路线仍是面向非技术用户的独立未来分发形态；本决策有意不把它用于开发者启动器。
@@ -32,8 +32,8 @@ Status: implemented
 
 **所得**：双击启动、无终端窗口，约 50-100 MB 且不捆绑运行时的应用，通过 npx 自动更新，以及干净的「启动 → 就绪行 → 回收」生命周期，绝不泄漏端口。
 
-**所付**：应用要求机器装有 Node ≥ 22.19 且带 `npx`，首次启动需联网（npx 下载）；应用是 ad-hoc 签名，Gatekeeper 首次需要「右键 → 打开」；GUI 启动的进程不继承 shell 环境变量，所以 `DEEPSEEK_API_KEY` 必须来自 `~/.dsh/.env` 或凭据文件；启动器始终运行已发布的 dsh 版本，可能与本机检出版本存在漂移。
+**所付**：应用要求机器装有 Node ≥ 22.19 且带 `npx`，首次启动需联网（npx 下载）；macOS 应用是 ad-hoc 签名，Gatekeeper 首次需要「右键 → 打开」；GUI 启动的进程不继承 shell 环境变量，所以 `DEEPSEEK_API_KEY` 必须来自 `~/.dsh/.env` 或凭据文件；启动器始终运行已发布的 dsh 版本，可能与本机检出版本存在漂移。
 
 ## 测试
 
-CI 流水线（`.github/workflows/desktop-macos.yml`）在 `macos-15`（Apple Silicon）上构建应用，并先对启动器的子命令做冒烟测试：启动 `npx --yes @deepseek-ai/dsh web --port 0`，抓取就绪行，curl 通服务地址，并打印服务进程 RSS。窗口化应用本身不在 CI 自动化，由用户在本机启动确认。
+两个 CI 流水线构建应用：`.github/workflows/desktop-macos.yml` 在 `macos-15`（Apple Silicon，`.app` + `.dmg`），`.github/workflows/desktop-windows.yml` 在 `windows-latest`（x64，MSI + NSIS 安装器）。两者都在每次推送到默认分支以及打 `v*` 标签时触发，上传产物，打标签时发布含安装包的 GitHub Release。窗口化应用本身不在 CI 自动化，由用户在本机启动确认。
