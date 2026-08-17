@@ -3,6 +3,10 @@
 
 mod launcher;
 mod node_path;
+#[cfg(unix)]
+mod process_impl_unix;
+#[cfg(windows)]
+mod process_impl_windows;
 
 use std::sync::Arc;
 use std::time::Duration;

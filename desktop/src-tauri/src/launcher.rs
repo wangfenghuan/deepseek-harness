@@ -2,19 +2,14 @@
 //! wait for its readiness line, and recycle the whole process tree on exit.
 
 use std::io::{BufRead, BufReader};
-use std::process::{Child, Command, Stdio};
+use std::process::{Child, Stdio};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 #[cfg(unix)]
-mod process_impl_unix;
+use crate::process_impl_unix as process_impl;
 #[cfg(windows)]
-mod process_impl_windows;
-
-#[cfg(unix)]
-use process_impl_unix as process_impl;
-#[cfg(windows)]
-use process_impl_windows as process_impl;
+use crate::process_impl_windows as process_impl;
 
 /// The CLI prints this readiness line on stdout once the web server is
 /// listening (`printUrl` defaults on). The OS-assigned port is read from it.
