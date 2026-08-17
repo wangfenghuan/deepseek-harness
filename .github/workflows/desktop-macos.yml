@@ -1,0 +1,99 @@
+name: macOS Desktop App
+
+# Builds the lightweight Tauri launcher ("DeepSeek Harness.app") on Apple
+# Silicon. The launcher spawns `npx @deepseek-ai/dsh web` as a child process and
+# loads the served URL in a WebView; see desktop/README.md for the design.
+#
+# Runs on every push to the default branch, on version tags (also publishing a
+# GitHub Release with the .dmg), and manually via workflow_dispatch.
+
+on:
+  push:
+    branches: [master, main]
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: desktop-macos-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build macOS app (Apple Silicon)
+    runs-on: macos-15
+    timeout-minutes: 45
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: 22
+
+      - name: Smoke-test the launcher child command
+        # Runs the exact command the launcher spawns and confirms the web GUI
+        # serves, so a broken `dsh web` never ships inside a broken .app.
+        run: |
+          set -euo pipefail
+          export DSH_TELEMETRY_DISABLED=1
+          LOG=/tmp/dsh-web.log
+          npx --yes @deepseek-ai/dsh web --host 127.0.0.1 --port 0 > "$LOG" 2>&1 &
+          PID=$!
+          cleanup() { kill -TERM "$PID" 2>/dev/null || true; wait "$PID" 2>/dev/null || true; }
+          trap cleanup EXIT
+          URL=""
+          for i in $(seq 1 180); do
+            URL="$(grep -m1 -o 'dsh web: http://127\.0\.0\.1:[0-9]*' "$LOG" 2>/dev/null || true)"
+            [ -n "$URL" ] && break
+            if ! kill -0 "$PID" 2>/dev/null; then echo "dsh web exited early"; cat "$LOG"; exit 1; fi
+            sleep 1
+          done
+          if [ -z "$URL" ]; then echo "timed out waiting for dsh web"; cat "$LOG"; exit 1; fi
+          URL="${URL#dsh web: }"
+          echo "server URL: $URL"
+          curl -sf "$URL/" > /dev/null || { echo "curl failed"; cat "$LOG"; exit 1; }
+          echo "sidecar smoke OK"
+          CHILD_PID="$(pgrep -P "$PID" | head -1 || true)"
+          if [ -n "$CHILD_PID" ]; then
+            ps -o rss=,comm= -p "$CHILD_PID" | awk '{printf "dsh server RSS: %.1f MB\n", $1/1024}'
+          fi
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Generate app icons
+        # Rasterize the committed SVG with resvg, then emit every platform
+        # icon (icns/png/ico) into desktop/src-tauri/icons.
+        run: |
+          npx --yes @resvg/resvg-js desktop/assets/app-icon.svg desktop/assets/app-icon-1024.png
+          npx --yes @tauri-apps/cli@2 icon desktop/assets/app-icon-1024.png -o desktop/src-tauri/icons
+
+      - name: Build the desktop app
+        env:
+          TAURI_SIGNING_IDENTITY: '-'
+          DSH_TELEMETRY_DISABLED: '1'
+        working-directory: desktop
+        run: npx --yes @tauri-apps/cli@2 build
+
+      - name: Report artifact sizes
+        run: |
+          du -sh desktop/src-tauri/target/release/bundle/macos/*.app | sed 's/^/  /'
+          du -sh desktop/src-tauri/target/release/bundle/dmg/*.dmg | sed 's/^/  /'
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: deepseek-harness-macos-arm64
+          path: |
+            desktop/src-tauri/target/release/bundle/macos/*.app
+            desktop/src-tauri/target/release/bundle/dmg/*.dmg
+
+      - name: Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: desktop/src-tauri/target/release/bundle/dmg/*.dmg
