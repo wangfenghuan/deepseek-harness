@@ -37,27 +37,6 @@ jobs:
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
 
-      - name: Generate app icons
-        shell: pwsh
-        run: |
-          $iconDir = Join-Path $env:RUNNER_TEMP "resvg"
-          New-Item -ItemType Directory -Path $iconDir -Force | Out-Null
-          Push-Location $iconDir
-          npm init -y | Out-Null
-          npm install --silent @resvg/resvg-js@2 | Out-Null
-          node -e @'
-          const { Resvg } = require('@resvg/resvg-js');
-          const fs = require('fs');
-          const svg = fs.readFileSync(process.env.SVG_PATH, 'utf8');
-          const png = new Resvg(svg, { fitTo: { mode: 'width', value: 1024 } }).render().asPng();
-          fs.writeFileSync(process.env.PNG_PATH, png);
-          '@
-          Pop-Location
-          npx --yes @tauri-apps/cli@2 icon desktop/assets/app-icon-1024.png -o desktop/src-tauri/icons
-        env:
-          SVG_PATH: ${{ github.workspace }}\desktop\assets\app-icon.svg
-          PNG_PATH: ${{ github.workspace }}\desktop\assets\app-icon-1024.png
-
       - name: Build the desktop app
         working-directory: desktop
         shell: pwsh

@@ -2,6 +2,7 @@
 //! its URL once ready, and recycle the child process when the app exits.
 
 mod launcher;
+mod node_bootstrap;
 mod node_path;
 #[cfg(unix)]
 mod process_impl_unix;
@@ -10,7 +11,7 @@ mod process_impl_windows;
 
 use std::sync::Arc;
 use std::time::Duration;
-use tauri::{Manager, RunEvent, WindowEvent};
+use tauri::{Manager, RunEvent, WebviewWindow, WindowEvent};
 
 use launcher::Launcher;
 
@@ -23,39 +24,119 @@ pub fn run() {
         .setup(|app| {
             let launcher = Arc::new(Launcher::new());
             app.manage(launcher.clone());
-            if let Err(error) = launcher.start(&node_path::candidate_path_string()) {
-                status(app, &format!("启动失败：{error}\n\n请确认已安装 Node.js ≥ 22（含 npx）。"), true);
-                return Ok(());
-            }
-            if let Some(window) = app.get_webview_window("main") {
-                let _ = window.eval(
-                    "window.__dshStatus && window.__dshStatus('正在启动 dsh 服务（首次运行需通过 npx 下载，请稍候…）')",
-                );
-                tauri::async_runtime::spawn(async move {
-                    match launcher.wait_ready(READY_TIMEOUT) {
-                        Ok(url) => match url.parse() {
-                            Ok(parsed) => {
-                                let _ = window.navigate(parsed);
-                                let _ = window.show();
-                                let _ = window.set_focus();
-                            }
-                            Err(_) => {
-                                let _ = window.eval(&format!(
-                                    "window.__dshStatus && window.__dshStatus('启动失败：无法解析服务地址 {}', true)",
-                                    escape_js(&url)
-                                ));
-                            }
-                        },
-                        Err(error) => {
-                            let message = format!("启动失败：{error}");
-                            let _ = window.eval(&format!(
-                                "window.__dshStatus && window.__dshStatus('{}', true)",
-                                escape_js(&message)
-                            ));
-                        }
-                    }
+
+            let window = app.get_webview_window("main");
+
+            // Relay every new child log line to the loading page by calling
+            // the `__dshAppendLog` JS hook via window.eval. This avoids
+            // enabling `withGlobalTauri` on the loading page.
+            if let Some(w) = &window {
+                let w = w.clone();
+                launcher.on_line(move |line, is_stderr| {
+                    append_log_window(Some(&w), line, is_stderr);
                 });
             }
+
+            let app_handle = app.handle().clone();
+            let system_path = node_path::candidate_path_string();
+
+            // Kick off the bootstrap on a background thread so the UI stays
+            // responsive during the (potentially multi-second) download.
+            tauri::async_runtime::spawn(async move {
+                // ---- Step 1: locate (or download) a usable node binary ----
+                let cache_dir = match app_handle.path().app_cache_dir() {
+                    Ok(dir) => dir,
+                    Err(e) => {
+                        status_window(&window, &format!("启动失败：无法获取缓存目录：{e}"), true);
+                        return;
+                    }
+                };
+
+                status_window(&window, "正在检查 Node.js 环境…", false);
+                append_log_window(window.as_ref(), "[info] 检查系统 Node.js 版本…", false);
+
+                let node_bin = match node_bootstrap::ensure_node(
+                    &system_path,
+                    &cache_dir,
+                    |done, total| {
+                        // Progress callback — runs on the download thread.
+                        if let Some(w) = &window {
+                            let js = format!(
+                                "window.__dshDownloadProgress && window.__dshDownloadProgress({}, {}, '正在下载 Node.js 便携版…')",
+                                done, total
+                            );
+                            let _ = w.eval(&js);
+                        }
+                    },
+                ) {
+                    Ok(p) => {
+                        append_log_window(
+                            window.as_ref(),
+                            &format!("[info] 使用 Node.js: {}", p.display()),
+                            false,
+                        );
+                        p
+                    }
+                    Err(e) => {
+                        status_window(
+                            &window,
+                            &format!("未找到可用的 Node.js（≥22）且自动下载失败：\n{e}\n\n请手动安装 Node.js 22 或更高版本。"),
+                            true,
+                        );
+                        return;
+                    }
+                };
+
+                // ---- Step 2: spawn dsh web using the resolved node ----
+                status_window(&window, "正在启动 dsh web 服务…", false);
+                append_log_window(window.as_ref(), "[info] 正在启动本地 dsh 服务…", false);
+
+                // Extend PATH with the directory containing the resolved node
+                // so npx can find it too.
+                let node_dir = node_bin
+                    .parent()
+                    .map(|p| p.to_string_lossy().into_owned())
+                    .unwrap_or_default();
+                let launch_path = if node_dir.is_empty() {
+                    system_path
+                } else {
+                    let sep = if cfg!(windows) { ';' } else { ':' };
+                    format!("{node_dir}{sep}{system_path}")
+                };
+
+                if let Err(e) = launcher.start(&launch_path) {
+                    status_window(
+                        &window,
+                        &format!("启动失败：{e}\n\n请确认已安装 Node.js ≥ 22（含 npx）。"),
+                        true,
+                    );
+                    return;
+                }
+
+                // ---- Step 3: wait for the server then navigate ----
+                match launcher.wait_ready(READY_TIMEOUT) {
+                    Ok(url) => match url.parse() {
+                        Ok(parsed) => {
+                            if let Some(w) = &window {
+                                let _ = w.navigate(parsed);
+                                let _ = w.show();
+                                let _ = w.set_focus();
+                            }
+                        }
+                        Err(_) => {
+                            status_window(
+                                &window,
+                                &format!("启动失败：无法解析服务地址 {url}"),
+                                true,
+                            );
+                        }
+                    },
+                    Err(error) => {
+                        let message = format!("启动失败：{error}");
+                        status_window(&window, &message, true);
+                    }
+                }
+            });
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![server_info, open_in_browser])
@@ -76,14 +157,26 @@ pub fn run() {
         });
 }
 
-/// Surface a message on the loading page through the `__dshStatus` hook.
-fn status(app: &tauri::App, message: &str, is_error: bool) {
-    if let Some(window) = app.get_webview_window("main") {
-        let _ = window.eval(&format!(
+/// Surface a status message on the loading page through the `__dshStatus` hook.
+fn status_window(window: &Option<WebviewWindow>, message: &str, is_error: bool) {
+    if let Some(w) = window {
+        let _ = w.eval(&format!(
             "window.__dshStatus && window.__dshStatus('{}', {})",
             escape_js(message),
             is_error
         ));
+    }
+}
+
+/// Append a log line on the loading page through the `__dshAppendLog` hook.
+fn append_log_window(window: Option<&WebviewWindow>, line: &str, is_stderr: bool) {
+    if let Some(w) = window {
+        let js = format!(
+            "window.__dshAppendLog && window.__dshAppendLog('{}', {})",
+            escape_js(line),
+            is_stderr
+        );
+        let _ = w.eval(&js);
     }
 }
 

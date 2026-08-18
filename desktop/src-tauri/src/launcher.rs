@@ -18,10 +18,20 @@ const READY_PREFIX: &str = "dsh web: http://";
 const LOG_CAPACITY: usize = 1000;
 
 /// Child output and readiness, shared between the reader threads and callers.
-#[derive(Default)]
 struct Shared {
     lines: Vec<String>,
     ready_url: Option<String>,
+    on_line: Option<Box<dyn Fn(&str, bool) + Send + Sync>>,
+}
+
+impl Default for Shared {
+    fn default() -> Self {
+        Self {
+            lines: Vec::new(),
+            ready_url: None,
+            on_line: None,
+        }
+    }
 }
 
 /// Snapshot of the sidecar for the `server_info` command.
@@ -45,6 +55,16 @@ impl Launcher {
             child: Mutex::new(None),
             shared: Arc::new(Mutex::new(Shared::default())),
         }
+    }
+
+    /// Register a callback invoked on every new log line. Called from the
+    /// reader thread with the shared lock held briefly — keep work cheap.
+    /// Receives the prefixed line and a stderr flag.
+    pub fn on_line<F>(&self, f: F)
+    where
+        F: Fn(&str, bool) + Send + Sync + 'static,
+    {
+        self.shared.lock().expect("shared lock").on_line = Some(Box::new(f));
     }
 
     /// Spawn the dsh web server (`npx --yes @deepseek-ai/dsh web --host
@@ -174,6 +194,9 @@ fn spawn_reader<R: BufRead + Send + 'static>(reader: R, shared: Arc<Mutex<Shared
             } else {
                 line
             };
+            if let Some(cb) = &shared.on_line {
+                cb(&prefixed, is_stderr);
+            }
             shared.lines.push(prefixed);
             if shared.lines.len() > LOG_CAPACITY {
                 let excess = shared.lines.len() - LOG_CAPACITY;

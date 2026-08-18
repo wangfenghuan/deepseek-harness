@@ -15,6 +15,14 @@ tauri-build = { version = "2", features = [] }
 [dependencies]
 tauri = { version = "2", features = [] }
 serde = { version = "1", features = ["derive"] }
+ureq = { version = "2", default-features = false, features = ["tls", "gzip"] }
+anyhow = "1"
 
 [target.'cfg(unix)'.dependencies]
 libc = "0.2"
+flate2 = "1"
+tar = "0.4"
+
+[target.'cfg(windows)'.dependencies]
+zip = { version = "2", default-features = false }
+thiserror = "1"
