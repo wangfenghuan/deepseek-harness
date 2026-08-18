@@ -43,11 +43,14 @@ jobs:
         # using the system iconutil tool.
         run: |
           mkdir -p desktop/src-tauri/icons
-          ICONSET="$(mktemp -d)/app.iconset"
-          iconutil -c iconset desktop/assets/app-icns.icns -o "$(dirname "$ICONSET")"
+          TMP_DIR="$(mktemp -d)"
+          cp desktop/assets/app-icns.icns "$TMP_DIR/app.icns"
+          cd "$TMP_DIR"
+          iconutil -c iconset app.icns
           # Find the largest PNG in the iconset and copy it as the base icon.
-          LARGEST=$(ls "$ICONSET"/icon_*.png | sort -t_ -k2 -n | tail -1)
-          cp "$LARGEST" desktop/src-tauri/icons/icon.png
+          LARGEST=$(ls app.iconset/icon_*.png | sort -t_ -k2 -n | tail -1)
+          cd "$OLDPWD"
+          cp "$TMP_DIR/$LARGEST" desktop/src-tauri/icons/icon.png
 
       - name: Build the desktop app
         env:
