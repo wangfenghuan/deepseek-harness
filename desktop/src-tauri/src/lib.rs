@@ -11,7 +11,11 @@ mod process_impl_windows;
 
 use std::sync::Arc;
 use std::time::Duration;
-use tauri::{Manager, RunEvent, WebviewWindow, WindowEvent};
+use tauri::{
+    menu::{Menu, MenuItem},
+    tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
+    Manager, RunEvent, WebviewWindow, WindowEvent,
+};
 
 use launcher::Launcher;
 
@@ -24,6 +28,53 @@ pub fn run() {
         .setup(|app| {
             let launcher = Arc::new(Launcher::new());
             app.manage(launcher.clone());
+
+            // ---- System tray icon with menu ----
+            let show_item = MenuItem::with_id(app, "show", "显示主窗口", true, None::<&str>)?;
+            let quit_item = MenuItem::with_id(app, "quit", "退出 DeepSeek Harness", true, None::<&str>)?;
+            let menu = Menu::with_items(app, &[&show_item, &quit_item])?;
+
+            let _tray = TrayIconBuilder::with_id("main-tray")
+                .tooltip("DeepSeek Harness")
+                .icon(app.default_window_icon().unwrap().clone())
+                .menu(&menu)
+                .show_menu_on_left_click(false)
+                .on_menu_event(|app, event| match event.id.as_ref() {
+                    "show" => {
+                        if let Some(w) = app.get_webview_window("main") {
+                            let _ = w.show();
+                            let _ = w.set_focus();
+                        }
+                    }
+                    "quit" => {
+                        app.exit(0);
+                    }
+                    _ => {}
+                })
+                .on_tray_icon_event(|tray, event| {
+                    if let TrayIconEvent::Click {
+                        button: MouseButton::Left,
+                        button_state: MouseButtonState::Up,
+                        ..
+                    } = event
+                    {
+                        // Left-click toggles window visibility.
+                        let app = tray.app_handle();
+                        if let Some(w) = app.get_webview_window("main") {
+                            match w.is_visible() {
+                                Ok(true) => {
+                                    let _ = w.hide();
+                                }
+                                Ok(false) => {
+                                    let _ = w.show();
+                                    let _ = w.set_focus();
+                                }
+                                _ => {}
+                            }
+                        }
+                    }
+                })
+                .build(app)?;
 
             let window = app.get_webview_window("main");
 
@@ -141,18 +192,33 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![server_info, open_in_browser])
         .on_window_event(|window, event| {
-            // Closing the only window quits the app so the sidecar is recycled.
-            if let WindowEvent::CloseRequested { .. } = event {
-                window.app_handle().exit(0);
+            // Closing the window hides it instead of quitting — the app keeps
+            // running in the background with a system tray icon so the dsh
+            // sidecar stays alive. Use the tray menu "Quit" or Cmd/Ctrl+Q to
+            // fully exit and recycle the sidecar.
+            if let WindowEvent::CloseRequested { api, .. } = event {
+                api.prevent_close();
+                let _ = window.hide();
             }
         })
         .build(tauri::generate_context!())
         .expect("error while building tauri application")
         .run(|app_handle, event| {
-            if let RunEvent::Exit = event {
-                if let Some(launcher) = app_handle.try_state::<Arc<Launcher>>() {
-                    launcher.stop();
+            match event {
+                RunEvent::Exit => {
+                    if let Some(launcher) = app_handle.try_state::<Arc<Launcher>>() {
+                        launcher.stop();
+                    }
                 }
+                #[cfg(target_os = "macos")]
+                RunEvent::Reopen { .. } => {
+                    // Clicking the Dock icon shows the window (macOS convention).
+                    if let Some(w) = app_handle.get_webview_window("main") {
+                        let _ = w.show();
+                        let _ = w.set_focus();
+                    }
+                }
+                _ => {}
             }
         });
 }

@@ -40,5 +40,11 @@
       "signingIdentity": "-",
       "minimumSystemVersion": "11.0"
     }
+  },
+  "trayIcon": {
+    "iconPath": "icons/icon.png",
+    "iconAsTemplate": true,
+    "title": "",
+    "showOnLeftClick": false
   }
 }
