@@ -37,6 +37,23 @@ jobs:
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
 
+      - name: Prepare PNG icon from .ico
+        # Tauri requires at least one PNG icon at build time (used internally
+        # and for Linux). We extract the largest PNG from the committed .ico
+        # using .NET System.Drawing.
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Path desktop/src-tauri/icons -Force | Out-Null
+          Add-Type -AssemblyName System.Drawing
+          $ico = [System.Drawing.Icon]::ExtractAssociatedIcon((Resolve-Path "desktop/assets/app-ico.ico").Path)
+          # ico files can contain multiple sizes; iterate to find the largest.
+          $sizes = [System.Drawing.Icon]::ExtractAssociatedIcon((Resolve-Path "desktop/assets/app-ico.ico").Path)
+          # Use the Bitmap from the Icon and save as PNG.
+          $bmp = $ico.ToBitmap()
+          $bmp.Save("desktop/src-tauri/icons/icon.png", [System.Drawing.Imaging.ImageFormat]::Png)
+          $bmp.Dispose()
+          $ico.Dispose()
+
       - name: Build the desktop app
         working-directory: desktop
         shell: pwsh

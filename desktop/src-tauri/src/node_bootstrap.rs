@@ -7,6 +7,7 @@
 //! sentinel file marks the installation complete so subsequent runs skip the
 //! download entirely.
 
+use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 

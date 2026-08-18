@@ -32,6 +32,7 @@
   "bundle": {
     "active": true,
     "icon": [
+      "icons/icon.png",
       "../assets/app-icns.icns",
       "../assets/app-ico.ico"
     ],
