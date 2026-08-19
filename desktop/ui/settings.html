@@ -214,6 +214,30 @@
     .btn:hover { border-color: var(--accent); color: var(--accent); }
     html[data-theme="light"] .btn:hover { color: var(--accent); }
 
+    /* Sidecar log panel */
+    .log-panel {
+      max-height: 220px;
+      overflow-y: auto;
+      padding: 10px 12px;
+      border-radius: 10px;
+      background: rgba(0, 0, 0, 0.28);
+      border: 1px solid var(--control-border);
+      font-family: "SF Mono", Menlo, Consolas, monospace;
+      font-size: 11.5px;
+      line-height: 1.6;
+      color: #c8d4f0;
+      white-space: pre-wrap;
+      word-break: break-all;
+      -webkit-user-select: text; user-select: text;
+    }
+    .log-panel::-webkit-scrollbar { width: 6px; }
+    .log-panel::-webkit-scrollbar-thumb { background: rgba(120, 140, 200, 0.25); border-radius: 3px; }
+    html[data-theme="light"] .log-panel {
+      background: rgba(0, 0, 0, 0.05);
+      color: #2a3558;
+    }
+    html[data-theme="light"] .log-panel::-webkit-scrollbar-thumb { background: rgba(90, 110, 180, 0.30); }
+
     .footer {
       padding: 12px 18px;
       font-size: 12px;
@@ -271,6 +295,15 @@
         <div class="actions">
           <button class="btn" id="openBrowserBtn">在浏览器中打开</button>
           <button class="btn" id="showMainBtn">显示主窗口</button>
+        </div>
+      </div>
+
+      <div class="section">
+        <div class="section-title">运行日志</div>
+        <div class="log-panel" id="logPanel"></div>
+        <div class="actions">
+          <button class="btn" id="refreshLogBtn">刷新</button>
+          <button class="btn" id="copyLogBtn">复制</button>
         </div>
       </div>
 
@@ -359,6 +392,29 @@
             serverStatus.textContent = err;
           });
       });
+
+      // Sidecar log panel (reuses server_info, which returns the captured lines)
+      var logPanel = document.getElementById('logPanel');
+      function refreshLog() {
+        window.__TAURI__.core.invoke('server_info').then(function (info) {
+          var lines = info.lines || [];
+          logPanel.textContent = lines.length ? lines.join('\n') : '（暂无日志）';
+          logPanel.scrollTop = logPanel.scrollHeight;
+        }).catch(function (err) {
+          logPanel.textContent = '获取日志失败: ' + err;
+        });
+      }
+      document.getElementById('refreshLogBtn').addEventListener('click', refreshLog);
+      document.getElementById('copyLogBtn').addEventListener('click', function () {
+        var text = logPanel.textContent || '';
+        if (navigator.clipboard) {
+          navigator.clipboard.writeText(text).then(function () {
+            serverStatus.textContent = '日志已复制到剪贴板';
+          }).catch(function () {});
+        }
+      });
+      refreshLog();
+      setInterval(refreshLog, 3000);
 
       // Initial load
       Promise.all([

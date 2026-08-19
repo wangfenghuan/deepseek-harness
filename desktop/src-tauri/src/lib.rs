@@ -31,6 +31,14 @@ const READY_TIMEOUT: Duration = Duration::from_secs(180);
 
 pub fn run() {
     tauri::Builder::default()
+        .plugin(tauri_plugin_single_instance::init(|app, _argv, _cwd| {
+            // A second launch focuses the existing main window instead of
+            // spawning another instance (and another npx sidecar).
+            if let Some(w) = app.get_webview_window("main") {
+                let _ = w.show();
+                let _ = w.set_focus();
+            }
+        }))
         .setup(|app| {
             let launcher = Arc::new(Launcher::new());
             app.manage(launcher.clone());
