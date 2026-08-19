@@ -1,0 +1,382 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>设置 - DeepSeek Harness</title>
+  <script src="theme.js"></script>
+  <style>
+    :root {
+      --bg-0: #07090f;
+      --bg-1: #0b1020;
+      --bg-top: #0f1630;
+      --accent: #4d6bfe;
+      --accent-2: #8aa2ff;
+      --fg: #e8ecf6;
+      --muted: #8a96b3;
+      --card-bg: rgba(13, 17, 32, 0.72);
+      --card-border: rgba(100, 130, 220, 0.18);
+      --control-bg: rgba(255, 255, 255, 0.05);
+      --control-border: rgba(120, 145, 220, 0.22);
+    }
+    html[data-theme="light"] {
+      --bg-0: #eef2fb;
+      --bg-1: #e0e8f8;
+      --bg-top: #d9e4fb;
+      --accent: #3d5df0;
+      --accent-2: #3a55c9;
+      --fg: #1b2440;
+      --muted: #5b6688;
+      --card-bg: rgba(255, 255, 255, 0.85);
+      --card-border: rgba(70, 100, 190, 0.20);
+      --control-bg: rgba(10, 20, 60, 0.05);
+      --control-border: rgba(60, 85, 160, 0.25);
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { height: 100%; overflow: hidden; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+      color: var(--fg);
+      -webkit-user-select: none; user-select: none;
+      background: var(--bg-0);
+    }
+
+    .bg { position: fixed; inset: 0; pointer-events: none; }
+    .bg-base {
+      position: absolute; inset: 0;
+      background:
+        radial-gradient(ellipse at top, var(--bg-top) 0%, var(--bg-0) 60%),
+        linear-gradient(180deg, var(--bg-1) 0%, var(--bg-0) 100%);
+    }
+    .bg-glow-1 {
+      position: absolute;
+      left: -10%; bottom: -20%;
+      width: 60vw; height: 60vw;
+      background: radial-gradient(circle, rgba(26, 56, 112, 0.7) 0%, transparent 60%);
+      filter: blur(80px);
+      mix-blend-mode: screen;
+    }
+    .bg-glow-2 {
+      position: absolute;
+      right: -10%; top: -15%;
+      width: 55vw; height: 55vw;
+      background: radial-gradient(circle, rgba(45, 95, 158, 0.55) 0%, transparent 70%);
+      filter: blur(90px);
+      mix-blend-mode: screen;
+    }
+    .bg-grid {
+      position: absolute; inset: 0;
+      background-image:
+        linear-gradient(rgba(77, 107, 254, 0.06) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(77, 107, 254, 0.06) 1px, transparent 1px);
+      background-size: 48px 48px;
+      mask-image: radial-gradient(ellipse at 50% 40%, black 30%, transparent 75%);
+      -webkit-mask-image: radial-gradient(ellipse at 50% 40%, black 30%, transparent 75%);
+    }
+    html[data-theme="light"] .bg-glow-1 {
+      background: radial-gradient(circle, rgba(120, 150, 225, 0.30) 0%, transparent 60%);
+    }
+    html[data-theme="light"] .bg-glow-2 {
+      background: radial-gradient(circle, rgba(120, 150, 225, 0.25) 0%, transparent 70%);
+    }
+    html[data-theme="light"] .bg-grid {
+      background-image:
+        linear-gradient(rgba(61, 93, 240, 0.10) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(61, 93, 240, 0.10) 1px, transparent 1px);
+    }
+
+    .wrap {
+      position: relative;
+      height: 100%;
+      display: flex; flex-direction: column;
+      padding: 24px 26px;
+      gap: 18px;
+      overflow-y: auto;
+    }
+
+    .card {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 16px;
+      backdrop-filter: blur(20px) saturate(140%);
+      -webkit-backdrop-filter: blur(20px) saturate(140%);
+      box-shadow: 0 24px 80px rgba(0, 0, 0, 0.45);
+    }
+    html[data-theme="light"] .card {
+      box-shadow: 0 24px 80px rgba(30, 50, 120, 0.14);
+    }
+
+    .header {
+      display: flex; align-items: center; gap: 12px;
+      padding: 16px 18px;
+      border-bottom: 1px solid var(--control-border);
+    }
+    .header .logo {
+      width: 34px; height: 34px;
+      border-radius: 9px;
+      background: linear-gradient(135deg, var(--accent-2), #1f3bb3);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 16px; font-weight: 700; color: #fff;
+    }
+    .header h1 { font-size: 16px; font-weight: 600; }
+    .header p { font-size: 12px; color: var(--muted); margin-top: 2px; }
+
+    .section { padding: 16px 18px; border-bottom: 1px solid var(--control-border); }
+    .section:last-of-type { border-bottom: none; }
+    .section-title {
+      font-size: 12px; font-weight: 600;
+      letter-spacing: 0.5px;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: 10px;
+    }
+
+    /* Theme segmented control */
+    .segmented {
+      display: flex; gap: 8px;
+    }
+    .seg-btn {
+      flex: 1;
+      padding: 9px 6px;
+      border-radius: 10px;
+      border: 1px solid var(--control-border);
+      background: var(--control-bg);
+      color: var(--muted);
+      font-size: 13px;
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+    .seg-btn:hover { color: var(--fg); }
+    .seg-btn.active {
+      background: linear-gradient(135deg, var(--accent), #2f47c0);
+      color: #fff;
+      border-color: transparent;
+      box-shadow: 0 6px 18px rgba(77, 107, 254, 0.35);
+    }
+
+    /* Toggle switch */
+    .row {
+      display: flex; align-items: center; justify-content: space-between;
+      gap: 14px;
+    }
+    .row .desc {
+      font-size: 13px;
+      line-height: 1.55;
+    }
+    .row .desc strong { font-weight: 600; }
+    .row .desc small {
+      display: block;
+      color: var(--muted);
+      font-size: 12px;
+      margin-top: 3px;
+    }
+    .switch { position: relative; width: 46px; height: 26px; flex: none; }
+    .switch input { position: absolute; opacity: 0; width: 100%; height: 100%; margin: 0; cursor: pointer; z-index: 2; }
+    .switch .track {
+      position: absolute; inset: 0;
+      border-radius: 13px;
+      background: rgba(128, 138, 170, 0.35);
+      transition: background 0.2s ease;
+    }
+    .switch .track::after {
+      content: "";
+      position: absolute; top: 3px; left: 3px;
+      width: 20px; height: 20px;
+      border-radius: 50%;
+      background: #fff;
+      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+      transition: transform 0.2s ease;
+    }
+    .switch input:checked + .track { background: var(--accent); }
+    .switch input:checked + .track::after { transform: translateX(20px); }
+
+    /* Status + actions */
+    .status-line {
+      font-family: "SF Mono", Menlo, Consolas, monospace;
+      font-size: 12px;
+      color: var(--muted);
+      word-break: break-all;
+      line-height: 1.6;
+    }
+    .status-line .ok { color: #5eeac0; }
+    html[data-theme="light"] .status-line .ok { color: #0e9e6e; }
+    .actions { display: flex; gap: 10px; margin-top: 12px; flex-wrap: wrap; }
+    .btn {
+      padding: 8px 14px;
+      border-radius: 10px;
+      border: 1px solid var(--control-border);
+      background: var(--control-bg);
+      color: var(--fg);
+      font-size: 13px;
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+    .btn:hover { border-color: var(--accent); color: var(--accent); }
+    html[data-theme="light"] .btn:hover { color: var(--accent); }
+
+    .footer {
+      padding: 12px 18px;
+      font-size: 12px;
+      color: var(--muted);
+      display: flex; justify-content: space-between; align-items: center;
+    }
+    .footer a { color: var(--muted); text-decoration: none; }
+    .footer a:hover { color: var(--accent); }
+  </style>
+</head>
+<body>
+  <div class="bg">
+    <div class="bg-base"></div>
+    <div class="bg-glow-1"></div>
+    <div class="bg-glow-2"></div>
+    <div class="bg-grid"></div>
+  </div>
+
+  <div class="wrap">
+    <div class="card">
+      <div class="header">
+        <div class="logo">DH</div>
+        <div>
+          <h1>设置</h1>
+          <p id="versionLabel">DeepSeek Harness</p>
+        </div>
+      </div>
+
+      <div class="section">
+        <div class="section-title">主题</div>
+        <div class="segmented" id="themeSeg">
+          <button class="seg-btn" data-theme="system">跟随系统</button>
+          <button class="seg-btn" data-theme="dark">深色</button>
+          <button class="seg-btn" data-theme="light">浅色</button>
+        </div>
+      </div>
+
+      <div class="section">
+        <div class="section-title">自动更新</div>
+        <div class="row">
+          <div class="desc">
+            <strong>自动安装最新版 dsh</strong>
+            <small>开启后每次启动时检查并安装最新版 @deepseek-ai/dsh（有新版本就安装）；关闭则使用缓存版本。改动在下次启动时生效。</small>
+          </div>
+          <label class="switch">
+            <input type="checkbox" id="autoUpdateToggle" />
+            <span class="track"></span>
+          </label>
+        </div>
+      </div>
+
+      <div class="section">
+        <div class="section-title">运行状态</div>
+        <div class="status-line" id="serverStatus">正在获取服务状态…</div>
+        <div class="actions">
+          <button class="btn" id="openBrowserBtn">在浏览器中打开</button>
+          <button class="btn" id="showMainBtn">显示主窗口</button>
+        </div>
+      </div>
+
+      <div class="footer">
+        <span>DeepSeek Harness · 桌面启动器</span>
+        <a href="#" id="repoLink">GitHub ↗</a>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    (function () {
+      'use strict';
+
+      var state = { settings: null };
+
+      var themeSeg = document.getElementById('themeSeg');
+      var autoToggle = document.getElementById('autoUpdateToggle');
+      var serverStatus = document.getElementById('serverStatus');
+      var versionLabel = document.getElementById('versionLabel');
+
+      function setActiveTheme(theme) {
+        Array.prototype.forEach.call(themeSeg.querySelectorAll('.seg-btn'), function (btn) {
+          btn.classList.toggle('active', btn.getAttribute('data-theme') === theme);
+        });
+      }
+
+      function render(settings) {
+        state.settings = settings;
+        setActiveTheme(settings.theme);
+        autoToggle.checked = settings.auto_update;
+      }
+
+      function save(next) {
+        var base = state.settings || { auto_update: true, theme: 'system' };
+        var merged = Object.assign({}, base, next);
+        return window.__TAURI__.core.invoke('set_settings', { settings: merged }).catch(function (err) {
+          serverStatus.textContent = '保存设置失败: ' + err;
+        });
+      }
+
+      themeSeg.addEventListener('click', function (event) {
+        var btn = event.target.closest('.seg-btn');
+        if (!btn) return;
+        save({ theme: btn.getAttribute('data-theme') });
+        setActiveTheme(btn.getAttribute('data-theme'));
+      });
+
+      autoToggle.addEventListener('change', function () {
+        save({ auto_update: autoToggle.checked });
+      });
+
+      function refreshServer() {
+        window.__TAURI__.core.invoke('server_info').then(function (info) {
+          if (info.url) {
+            serverStatus.innerHTML = '服务地址: <span class="ok">' + info.url + '</span>' +
+              (info.pid ? ' · PID ' + info.pid : '') +
+              (info.running ? ' · 运行中' : ' · 未运行');
+          } else {
+            serverStatus.textContent = info.running
+              ? 'dsh 服务启动中…'
+              : 'dsh 服务未运行';
+          }
+        }).catch(function (err) {
+          serverStatus.textContent = '获取状态失败: ' + err;
+        });
+      }
+
+      document.getElementById('openBrowserBtn').addEventListener('click', function () {
+        window.__TAURI__.core.invoke('open_in_browser').catch(function (err) {
+          serverStatus.textContent = err;
+        });
+      });
+
+      document.getElementById('showMainBtn').addEventListener('click', function () {
+        window.__TAURI__.core.invoke('show_main_window').catch(function (err) {
+          serverStatus.textContent = err;
+        });
+      });
+
+      document.getElementById('repoLink').addEventListener('click', function (event) {
+        event.preventDefault();
+        window.__TAURI__.core
+          .invoke('open_url', { url: 'https://github.com/wangfenghuan/deepseek-harness' })
+          .catch(function (err) {
+            serverStatus.textContent = err;
+          });
+      });
+
+      // Initial load
+      Promise.all([
+        window.__TAURI__.core.invoke('get_settings'),
+        window.__TAURI__.app ? window.__TAURI__.app.getVersion() : Promise.resolve(''),
+        refreshServer()
+      ]).then(function (results) {
+        render(results[0]);
+        if (results[1]) versionLabel.textContent = 'DeepSeek Harness · v' + results[1];
+      }).catch(function () {
+        versionLabel.textContent = 'DeepSeek Harness';
+      });
+
+      // Live updates pushed from Rust
+      window.__TAURI__.event.listen('settings-changed', function (event) {
+        render(event.payload);
+      });
+    })();
+  </script>
+</body>
+</html>

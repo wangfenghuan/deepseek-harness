@@ -4,20 +4,26 @@
 mod launcher;
 mod node_bootstrap;
 mod node_path;
+mod settings;
 #[cfg(unix)]
 mod process_impl_unix;
 #[cfg(windows)]
 mod process_impl_windows;
+#[cfg(target_os = "macos")]
+mod tray_icon;
 
 use std::sync::Arc;
 use std::time::Duration;
 use tauri::{
     menu::{Menu, MenuItem},
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
-    Manager, RunEvent, WebviewWindow, WindowEvent,
+    Emitter, Manager, RunEvent, WebviewUrl, WebviewWindowBuilder, WebviewWindow, WindowEvent,
 };
+#[cfg(target_os = "macos")]
+use tauri::Theme;
 
 use launcher::Launcher;
+use settings::{Settings, SettingsStore};
 
 /// How long to wait for the dsh web server to become ready. The first run also
 /// downloads `@deepseek-ai/dsh` through npx, which can take a while.
@@ -28,15 +34,36 @@ pub fn run() {
         .setup(|app| {
             let launcher = Arc::new(Launcher::new());
             app.manage(launcher.clone());
+            app.manage(SettingsStore::load_or_default(&app.handle()));
 
             // ---- System tray icon with menu ----
             let show_item = MenuItem::with_id(app, "show", "显示主窗口", true, None::<&str>)?;
-            let quit_item = MenuItem::with_id(app, "quit", "退出 DeepSeek Harness", true, None::<&str>)?;
-            let menu = Menu::with_items(app, &[&show_item, &quit_item])?;
+            let settings_item = MenuItem::with_id(app, "settings", "设置…", true, None::<&str>)?;
+            let quit_item =
+                MenuItem::with_id(app, "quit", "退出 DeepSeek Harness", true, None::<&str>)?;
+            let menu = Menu::with_items(app, &[&show_item, &settings_item, &quit_item])?;
+
+            // macOS: the menu-bar icon must stay legible on the system menu
+            // bar, which follows the system appearance (dark bar → light
+            // icon). Windows keeps the default window icon in the tray.
+            let tray_icon = {
+                #[cfg(target_os = "macos")]
+                {
+                    let theme = app
+                        .get_webview_window("main")
+                        .and_then(|window| window.theme().ok())
+                        .unwrap_or(Theme::Light);
+                    tray_icon::icon_for_theme(theme)
+                }
+                #[cfg(not(target_os = "macos"))]
+                {
+                    app.default_window_icon().unwrap().clone()
+                }
+            };
 
             let _tray = TrayIconBuilder::with_id("main-tray")
                 .tooltip("DeepSeek Harness")
-                .icon(app.default_window_icon().unwrap().clone())
+                .icon(tray_icon)
                 .menu(&menu)
                 .show_menu_on_left_click(false)
                 .on_menu_event(|app, event| match event.id.as_ref() {
@@ -45,6 +72,9 @@ pub fn run() {
                             let _ = w.show();
                             let _ = w.set_focus();
                         }
+                    }
+                    "settings" => {
+                        let _ = open_settings_window(app.clone());
                     }
                     "quit" => {
                         app.exit(0);
@@ -79,8 +109,9 @@ pub fn run() {
             let window = app.get_webview_window("main");
 
             // Relay every new child log line to the loading page by calling
-            // the `__dshAppendLog` JS hook via window.eval. This avoids
-            // enabling `withGlobalTauri` on the loading page.
+            // the `__dshAppendLog` JS hook via window.eval. Rust→JS eval is
+            // used here (no withGlobalTauri needed for the log stream), while
+            // the settings pages use invoke + events through `withGlobalTauri`.
             if let Some(w) = &window {
                 let w = w.clone();
                 launcher.on_line(move |line, is_stderr| {
@@ -90,6 +121,7 @@ pub fn run() {
 
             let app_handle = app.handle().clone();
             let system_path = node_path::candidate_path_string();
+            let auto_update = app_handle.state::<SettingsStore>().get().auto_update;
 
             // Kick off the bootstrap on a background thread so the UI stays
             // responsive during the (potentially multi-second) download.
@@ -155,7 +187,7 @@ pub fn run() {
                     format!("{node_dir}{sep}{system_path}")
                 };
 
-                if let Err(e) = launcher.start(&launch_path) {
+                if let Err(e) = launcher.start(&launch_path, auto_update) {
                     status_window(
                         &window,
                         &format!("启动失败：{e}\n\n请确认已安装 Node.js ≥ 22（含 npx）。"),
@@ -190,15 +222,34 @@ pub fn run() {
             });
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![server_info, open_in_browser])
+        .invoke_handler(tauri::generate_handler![
+            server_info,
+            open_in_browser,
+            open_url,
+            get_settings,
+            set_settings,
+            open_settings_window,
+            show_main_window
+        ])
         .on_window_event(|window, event| {
-            // Closing the window hides it instead of quitting — the app keeps
-            // running in the background with a system tray icon so the dsh
-            // sidecar stays alive. Use the tray menu "Quit" or Cmd/Ctrl+Q to
-            // fully exit and recycle the sidecar.
-            if let WindowEvent::CloseRequested { api, .. } = event {
-                api.prevent_close();
-                let _ = window.hide();
+            match event {
+                // Closing any launcher window hides it instead of quitting —
+                // the app keeps running in the background with a system tray
+                // icon so the dsh sidecar stays alive. Use the tray menu
+                // "Quit" or Cmd/Ctrl+Q to fully exit and recycle the sidecar.
+                WindowEvent::CloseRequested { api, .. } => {
+                    api.prevent_close();
+                    let _ = window.hide();
+                }
+                #[cfg(target_os = "macos")]
+                WindowEvent::ThemeChanged(theme) => {
+                    // Keep the menu-bar icon legible as the system appearance
+                    // changes (dark menu bar → light icon, light → dark icon).
+                    if let Some(tray) = window.app_handle().tray_by_id("main-tray") {
+                        let _ = tray.set_icon(tray_icon::icon_for_theme(theme));
+                    }
+                }
+                _ => {}
             }
         })
         .build(tauri::generate_context!())
@@ -275,4 +326,71 @@ fn open_in_browser(launcher: tauri::State<'_, Arc<Launcher>>) -> Result<(), Stri
     #[cfg(not(windows))]
     let status = std::process::Command::new("open").arg(&url).status();
     status.map(|_| ()).map_err(|error| error.to_string())
+}
+
+/// Open a URL in the system default browser. Tauri webviews cannot
+/// `window.open` external URLs, so links go through this command.
+#[tauri::command]
+fn open_url(url: String) -> Result<(), String> {
+    #[cfg(windows)]
+    let status = std::process::Command::new("cmd")
+        .args(["/C", "start", "", &url])
+        .status();
+    #[cfg(not(windows))]
+    let status = std::process::Command::new("open").arg(&url).status();
+    status.map(|_| ()).map_err(|error| error.to_string())
+}
+
+/// Bring the main window to the foreground.
+#[tauri::command]
+fn show_main_window(app: tauri::AppHandle) -> Result<(), String> {
+    if let Some(w) = app.get_webview_window("main") {
+        let _ = w.show();
+        let _ = w.set_focus();
+    }
+    Ok(())
+}
+
+/// Current persisted settings.
+#[tauri::command]
+fn get_settings(store: tauri::State<'_, SettingsStore>) -> Settings {
+    store.get()
+}
+
+/// Persist new settings and broadcast them so every open launcher window
+/// (splash + settings) updates live.
+#[tauri::command]
+fn set_settings(
+    app: tauri::AppHandle,
+    store: tauri::State<'_, SettingsStore>,
+    settings: Settings,
+) -> Result<(), String> {
+    store.set(settings.clone())?;
+    let _ = app.emit("settings-changed", &settings);
+    Ok(())
+}
+
+/// Show the settings window, creating it on first use. Single instance: a
+/// second call focuses the existing window.
+#[tauri::command]
+fn open_settings_window(app: tauri::AppHandle) -> Result<(), String> {
+    if let Some(window) = app.get_webview_window("settings") {
+        let _ = window.show();
+        let _ = window.set_focus();
+        return Ok(());
+    }
+    let window = WebviewWindowBuilder::new(
+        &app,
+        "settings",
+        WebviewUrl::App("settings.html".into()),
+    )
+    .title("设置 - DeepSeek Harness")
+    .inner_size(460.0, 540.0)
+    .min_inner_size(400.0, 460.0)
+    .center()
+    .build()
+    .map_err(|error| error.to_string())?;
+    let _ = window.show();
+    let _ = window.set_focus();
+    Ok(())
 }

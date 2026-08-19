@@ -4,10 +4,12 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>DeepSeek Harness</title>
+  <script src="theme.js"></script>
   <style>
     :root {
       --bg-0: #07090f;
       --bg-1: #0b1020;
+      --bg-top: #0f1630;
       --accent: #4d6bfe;
       --accent-2: #8aa2ff;
       --cyan: #5ecfff;
@@ -16,6 +18,68 @@
       --muted: #8a96b3;
       --terminal-bg: rgba(9, 12, 24, 0.68);
       --terminal-border: rgba(100, 130, 220, 0.18);
+    }
+    /* Light theme — the same layout with a bright palette. */
+    html[data-theme="light"] {
+      --bg-0: #eef2fb;
+      --bg-1: #e0e8f8;
+      --bg-top: #d9e4fb;
+      --accent: #3d5df0;
+      --accent-2: #3a55c9;
+      --cyan: #1689c4;
+      --warm: #4a5fd0;
+      --fg: #1b2440;
+      --muted: #5b6688;
+      --terminal-bg: rgba(255, 255, 255, 0.85);
+      --terminal-border: rgba(70, 100, 190, 0.20);
+    }
+    html[data-theme="light"] .bg-base {
+      background:
+        radial-gradient(ellipse at top, var(--bg-top) 0%, var(--bg-0) 60%),
+        linear-gradient(180deg, var(--bg-1) 0%, var(--bg-0) 100%);
+    }
+    html[data-theme="light"] .bg-glow-1 {
+      background: radial-gradient(circle, rgba(120, 150, 225, 0.30) 0%, transparent 60%);
+    }
+    html[data-theme="light"] .bg-glow-2 {
+      background: radial-gradient(ellipse at center, rgba(120, 150, 225, 0.25) 0%, rgba(120, 150, 225, 0.15) 40%, transparent 70%);
+    }
+    html[data-theme="light"] .bg-glow-3 {
+      background: radial-gradient(circle, rgba(130, 155, 225, 0.22) 0%, rgba(120, 150, 225, 0.14) 30%, transparent 70%);
+    }
+    html[data-theme="light"] .bg-grid {
+      background-image:
+        linear-gradient(rgba(61, 93, 240, 0.10) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(61, 93, 240, 0.10) 1px, transparent 1px);
+    }
+    html[data-theme="light"] .bg-top-shine {
+      background: radial-gradient(ellipse at center, rgba(90, 120, 230, 0.10) 0%, transparent 65%);
+    }
+    html[data-theme="light"] .brand h1 {
+      background: linear-gradient(135deg, #22305c 0%, #3a55c9 60%, #2b46b8 100%);
+      -webkit-background-clip: text; background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+    html[data-theme="light"] .terminal {
+      box-shadow:
+        0 24px 80px rgba(30, 50, 120, 0.16),
+        0 0 0 1px rgba(30, 50, 120, 0.04) inset,
+        0 1px 0 rgba(255, 255, 255, 0.6) inset;
+    }
+    html[data-theme="light"] .terminal-header {
+      background: rgba(0, 0, 0, 0.03);
+      border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+    }
+    html[data-theme="light"] .terminal-body { color: #2a3558; }
+    html[data-theme="light"] .log-line.stderr { color: #c63b3b; }
+    html[data-theme="light"] .log-line.prefix { color: #3a55c9; }
+    html[data-theme="light"] .log-line.ready {
+      color: #0e9e6e;
+      text-shadow: 0 0 10px rgba(14, 158, 110, 0.25);
+    }
+    html[data-theme="light"] .progress-bar { background: rgba(0, 0, 0, 0.08); }
+    html[data-theme="light"] .terminal-body::-webkit-scrollbar-thumb {
+      background: rgba(90, 110, 180, 0.30);
     }
     * { box-sizing: border-box; margin: 0; padding: 0; }
     html, body { height: 100%; overflow: hidden; }
@@ -31,7 +95,7 @@
     .bg-base {
       position: absolute; inset: 0;
       background:
-        radial-gradient(ellipse at top, #0f1630 0%, var(--bg-0) 60%),
+        radial-gradient(ellipse at top, var(--bg-top) 0%, var(--bg-0) 60%),
         linear-gradient(180deg, var(--bg-1) 0%, var(--bg-0) 100%);
     }
     /* Glow orbs — deep blue/cyan, soft and blurred */
@@ -269,9 +333,43 @@
       display: flex; justify-content: space-between;
       margin-top: 6px;
     }
+
+    /* ===== Settings (gear) button ===== */
+    .settings-btn {
+      position: fixed;
+      top: 18px; right: 18px;
+      width: 34px; height: 34px;
+      border-radius: 10px;
+      display: flex; align-items: center; justify-content: center;
+      border: 1px solid var(--terminal-border);
+      background: rgba(255, 255, 255, 0.04);
+      color: var(--muted);
+      cursor: pointer;
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      transition: color 0.2s ease, border-color 0.2s ease, background 0.2s ease, transform 0.1s ease;
+      z-index: 20;
+    }
+    .settings-btn svg { width: 18px; height: 18px; }
+    .settings-btn:hover {
+      color: var(--fg);
+      border-color: var(--accent);
+      background: rgba(77, 107, 254, 0.12);
+    }
+    .settings-btn:active { transform: scale(0.94); }
+    html[data-theme="light"] .settings-btn {
+      background: rgba(255, 255, 255, 0.55);
+    }
   </style>
 </head>
 <body>
+  <button class="settings-btn" id="settingsBtn" title="设置" aria-label="设置">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <circle cx="12" cy="12" r="3"></circle>
+      <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33h.01a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51h.01a1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82v.01a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+    </svg>
+  </button>
+
   <div class="bg">
     <div class="bg-base"></div>
     <canvas id="particle-canvas"></canvas>
@@ -354,6 +452,9 @@
       window.addEventListener('resize', spawn);
 
       function draw() {
+        var isLight = (document.documentElement.dataset.theme || 'dark') === 'light';
+        var lineRGB = isLight ? '90,120,210' : '120,150,230';
+        var dotRGB = isLight ? '80,110,200' : '150,180,255';
         ctx.clearRect(0, 0, w, h);
 
         // Connection lines
@@ -366,7 +467,7 @@
             var dist = Math.sqrt(dx * dx + dy * dy);
             if (dist < 130) {
               var alpha = (1 - dist / 130) * 0.25;
-              ctx.strokeStyle = 'rgba(120, 150, 230, ' + alpha + ')';
+              ctx.strokeStyle = 'rgba(' + lineRGB + ', ' + alpha + ')';
               ctx.lineWidth = 0.6;
               ctx.beginPath();
               ctx.moveTo(p1.x, p1.y);
@@ -386,7 +487,7 @@
 
           ctx.beginPath();
           ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
-          ctx.fillStyle = 'rgba(150, 180, 255, ' + p.a + ')';
+          ctx.fillStyle = 'rgba(' + dotRGB + ', ' + p.a + ')';
           ctx.fill();
         }
 
@@ -462,6 +563,21 @@
       // Welcome line
       appendLine('$ dsh local runtime', false);
       appendLine('// 正在检查本机环境，准备启动 dsh web 服务…', false);
+
+      // Expose for other scopes (settings button error reporting).
+      window.__dshAppendLine = appendLine;
+    })();
+
+    // ===== Settings button =====
+    (function () {
+      var btn = document.getElementById('settingsBtn');
+      btn.addEventListener('click', function () {
+        if (window.__TAURI__) {
+          window.__TAURI__.core.invoke('open_settings_window').catch(function (err) {
+            if (window.__dshAppendLine) window.__dshAppendLine('[error] 打开设置失败: ' + err, true);
+          });
+        }
+      });
     })();
   </script>
 </body>

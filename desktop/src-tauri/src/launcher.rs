@@ -67,13 +67,20 @@ impl Launcher {
         self.shared.lock().expect("shared lock").on_line = Some(Box::new(f));
     }
 
-    /// Spawn the dsh web server (`npx --yes @deepseek-ai/dsh web --host
-    /// 127.0.0.1 --port 0`) as a child with the given `PATH`, cwd set to the
-    /// user's home, and telemetry off.
-    pub fn start(&self, path: &str) -> Result<(), String> {
+    /// Spawn the dsh web server as a child with the given `PATH`, cwd set to
+    /// the user's home, and telemetry off. When `use_latest` is set, npx
+    /// resolves `@deepseek-ai/dsh@latest` on every launch and installs a newer
+    /// build when one exists; otherwise it reuses the npx cache. Either way
+    /// the command is `npx --yes <spec> web --host 127.0.0.1 --port 0`.
+    pub fn start(&self, path: &str, use_latest: bool) -> Result<(), String> {
+        let spec = if use_latest {
+            "@deepseek-ai/dsh@latest"
+        } else {
+            "@deepseek-ai/dsh"
+        };
         let args = [
             "--yes",
-            "@deepseek-ai/dsh",
+            spec,
             "web",
             "--host",
             "127.0.0.1",

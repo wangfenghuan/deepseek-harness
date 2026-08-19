@@ -11,7 +11,7 @@ The launcher wraps the already-installed dsh CLI — it does **not** bundle Node
 ## How it works
 
 1. The Rust core rebuilds a `PATH` that includes common Node locations (macOS: `/opt/homebrew/bin`, `/usr/local/bin`, nvm, volta, fnm, mise, `~/.local/bin`), because Finder-launched GUI apps inherit only a minimal `PATH`; Windows GUI apps inherit the full user `PATH` and are used as-is.
-2. It spawns `npx --yes @deepseek-ai/dsh web --host 127.0.0.1 --port 0` as a child (`cmd /C` on Windows), with `cwd` set to the user's home and `DSH_TELEMETRY_DISABLED=1`. `--port 0` lets the OS assign a free port.
+2. It spawns `npx --yes @deepseek-ai/dsh@latest web --host 127.0.0.1 --port 0` as a child (`cmd /C` on Windows) with `cwd` set to the user's home and `DSH_TELEMETRY_DISABLED=1`. `--port 0` lets the OS assign a free port. With auto-update enabled (the default) npx resolves the `latest` tag and installs a newer build when one exists; with auto-update off it uses the plain `@deepseek-ai/dsh` spec, so npx reuses its cached version (see [Settings](#settings)).
 3. The CLI prints a readiness line `dsh web: http://127.0.0.1:<port>`; the launcher parses it and navigates the window to that URL.
 4. On window close or app exit the launcher recycles the child process tree (macOS: `SIGTERM` to the process group, `SIGKILL` after 5 seconds; Windows: `taskkill /T /F`). The port is released when the process dies.
 
@@ -31,10 +31,16 @@ Both run on every push to the default branch and on `v*` tags, upload their arti
 
 ### Locally
 
+The icons are committed directly (`assets/app-icns.icns`, `assets/app-ico.ico`, plus
+`assets/deepseek-wite.png` / `assets/deepseek-black.png` for the macOS menu bar), so
+no icon-generation step is needed. Tauri still requires one PNG icon at build time
+(`src-tauri/icons/icon.png`), which the CI workflows produce from the `.icns` / `.ico`;
+locally, extract it the same way the CI does (macOS: `iconutil -c iconset app.icns`
+then copy the largest `icon_*.png`; Windows: decode the `.ico` via System.Drawing),
+then build:
+
 ```sh
 cd desktop
-npx --yes @resvg/resvg-js assets/app-icon.svg assets/app-icon-1024.png   # first time only
-npx --yes @tauri-apps/cli@2 icon assets/app-icon-1024.png                # generates src-tauri/icons
 TAURI_SIGNING_IDENTITY=- npx --yes @tauri-apps/cli@2 build
 open src-tauri/target/release/bundle/macos/*.app
 ```
@@ -51,6 +57,14 @@ On Windows the same commands produce `src-tauri\target\release\bundle\msi\*.msi`
 
 - `DSH_HOME` overrides the default `~/.dsh` user-data root (profiles, sessions, credentials).
 - The launcher sets `DSH_TELEMETRY_DISABLED=1` (telemetry stays local).
+- On macOS the menu-bar (tray) icon follows the system appearance: the light logo in dark mode and the dark logo in light mode (`assets/deepseek-wite.png` / `assets/deepseek-black.png`), and it updates live when the system theme changes.
+
+## Settings
+
+Open the settings window from the tray menu ("设置…") or the gear button on the launch page. Settings persist to `settings.json` in the app config directory.
+
+- **Theme** — 跟随系统 / 深色 / 浅色 (follow system / dark / light). Applies to the launcher's own windows (the splash page and the settings window); the dsh web app keeps its own theme.
+- **Auto update** — when on (default), every launch resolves `@deepseek-ai/dsh@latest` through npx and installs a newer build when one exists; when off, npx reuses its cached version. The change takes effect on the next launch.
 
 ## Sizes
 
