@@ -18,14 +18,14 @@
 
 ## 环境要求
 
-- macOS 11+（Apple Silicon；CI 流水线构建 `aarch64-apple-darwin`）或 Windows 10/11 x64（WebView2 运行时，Windows 11 自带）。
+- macOS 11+（Apple Silicon arm64 与 Intel x86_64 都支持；CI 流水线构建两种架构）或 Windows 10/11 x64（WebView2 运行时，Windows 11 自带）。
 - 已安装 Node.js ≥ 22.19，且带 `npx`。
 
 ## 构建
 
 ### GitHub Actions（CI）
 
-- [`.github/workflows/desktop-macos.yml`](../.github/workflows/desktop-macos.yml) 在 `macos-15`（Apple Silicon）上构建 `DeepSeek Harness.app` 与 `.dmg`。
+- [`.github/workflows/desktop-macos.yml`](../.github/workflows/desktop-macos.yml) 在 `macos-15` 上为 Apple Silicon（arm64）与 Intel（x86_64）构建 `DeepSeek Harness.app` 与 `.dmg`（Intel 为交叉编译），外加每个 `.app` 的 `.zip`。
 - [`.github/workflows/desktop-windows.yml`](../.github/workflows/desktop-windows.yml) 在 `windows-latest`（x64）上构建 NSIS 安装器（`.exe`）与 MSI（`.msi`）。
 
 两者都在每次推送到默认分支以及打 `v*` 标签时触发，上传产物；打标签时还会发布含安装包的 GitHub Release。

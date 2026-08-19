@@ -18,14 +18,14 @@ The launcher wraps the already-installed dsh CLI — it does **not** bundle Node
 
 ## Requirements
 
-- macOS 11+ (Apple Silicon; the CI workflow builds `aarch64-apple-darwin`) or Windows 10/11 x64 (WebView2 runtime, built in on Windows 11).
+- macOS 11+ on both Apple Silicon (arm64) and Intel (x86_64); the CI workflow builds both. Or Windows 10/11 x64 (WebView2 runtime, built in on Windows 11).
 - Node.js ≥ 22.19 with `npx` available.
 
 ## Build
 
 ### GitHub Actions (CI)
 
-- [`.github/workflows/desktop-macos.yml`](../.github/workflows/desktop-macos.yml) builds `DeepSeek Harness.app` and the `.dmg` on `macos-15` (Apple Silicon).
+- [`.github/workflows/desktop-macos.yml`](../.github/workflows/desktop-macos.yml) builds `DeepSeek Harness.app` and the `.dmg` for both Apple Silicon (arm64) and Intel (x86_64) on `macos-15` (cross-compiling the Intel target), plus a `.zip` of each `.app`.
 - [`.github/workflows/desktop-windows.yml`](../.github/workflows/desktop-windows.yml) builds the NSIS installer (`.exe`) and MSI (`.msi`) on `windows-latest` (x64).
 
 Both run on every push to the default branch and on `v*` tags, upload their artifacts, and publish a GitHub Release with the installers for tags.

@@ -1,11 +1,13 @@
 name: macOS Desktop App
 
-# Builds the lightweight Tauri launcher ("DeepSeek Harness.app") on Apple
-# Silicon. The launcher spawns `npx @deepseek-ai/dsh web` as a child process and
-# loads the served URL in a WebView; see desktop/README.md for the design.
+# Builds the lightweight Tauri launcher ("DeepSeek Harness.app") for both Apple
+# Silicon (arm64) and Intel (x86_64) macOS. The launcher spawns
+# `npx @deepseek-ai/dsh web` as a child process and loads the served URL in a
+# WebView; see desktop/README.md for the design.
 #
 # Runs on every push to the default branch, on version tags (also publishing a
-# GitHub Release with the .dmg), and manually via workflow_dispatch.
+# GitHub Release with the .dmg and a .zip of the .app for each architecture),
+# and manually via workflow_dispatch.
 
 on:
   push:
@@ -22,9 +24,17 @@ concurrency:
 
 jobs:
   build:
-    name: Build macOS app (Apple Silicon)
+    name: Build macOS app (${{ matrix.arch }})
     runs-on: macos-15
     timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: aarch64-apple-darwin
+            arch: arm64
+          - target: x86_64-apple-darwin
+            arch: x86_64
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -36,6 +46,8 @@ jobs:
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
 
       - name: Prepare PNG icon from .icns
         # Tauri requires at least one PNG icon at build time (used internally
@@ -57,25 +69,47 @@ jobs:
           TAURI_SIGNING_IDENTITY: '-'
           DSH_TELEMETRY_DISABLED: '1'
         working-directory: desktop
-        run: npx --yes @tauri-apps/cli@2 build
+        run: npx --yes @tauri-apps/cli@2 build --target ${{ matrix.target }}
 
       - name: Report artifact sizes
         run: |
-          du -sh desktop/src-tauri/target/release/bundle/macos/*.app | sed 's/^/  /'
-          du -sh desktop/src-tauri/target/release/bundle/dmg/*.dmg | sed 's/^/  /'
+          find desktop/src-tauri/target -path '*bundle/macos/*.app' -maxdepth 12 -exec du -sh {} \; | sed 's/^/  /'
+          find desktop/src-tauri/target -path '*bundle/dmg/*.dmg' -maxdepth 12 -exec du -sh {} \; | sed 's/^/  /'
+
+      - name: Zip the .app bundle
+        # Releases are plain files, so the .app directory is zipped with ditto
+        # (preserves permissions/symlinks); the .dmg is uploaded as-is.
+        shell: bash
+        run: |
+          APP="$(find desktop/src-tauri/target -path '*bundle/macos/*.app' -maxdepth 12 | head -1)"
+          BUNDLE_DIR="$(dirname "$APP")"
+          cd "$BUNDLE_DIR"
+          ditto -c -k --keepParent "DeepSeek Harness.app" "DeepSeek-Harness-macos-${{ matrix.arch }}.zip"
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v5
         with:
-          name: deepseek-harness-macos-arm64
+          name: deepseek-harness-macos-${{ matrix.arch }}
           path: |
-            desktop/src-tauri/target/release/bundle/macos/*.app
-            desktop/src-tauri/target/release/bundle/dmg/*.dmg
+            desktop/src-tauri/target/**/bundle/macos/*.zip
+            desktop/src-tauri/target/**/bundle/dmg/*.dmg
 
-      - name: Release
-        if: startsWith(github.ref, 'refs/tags/v')
+  # Release is its own job so the two matrix builds don't race to create the
+  # same tag's release.
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download macOS artifacts
+        uses: actions/download-artifact@v5
+        with:
+          path: artifacts
+          pattern: deepseek-harness-macos-*
+
+      - name: Publish release
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            desktop/src-tauri/target/release/bundle/macos/*.app
-            desktop/src-tauri/target/release/bundle/dmg/*.dmg
+            artifacts/**/*.dmg
+            artifacts/**/*.zip
