@@ -246,7 +246,7 @@ pub fn run() {
                     // Keep the menu-bar icon legible as the system appearance
                     // changes (dark menu bar → light icon, light → dark icon).
                     if let Some(tray) = window.app_handle().tray_by_id("main-tray") {
-                        let _ = tray.set_icon(tray_icon::icon_for_theme(theme));
+                        let _ = tray.set_icon(Some(tray_icon::icon_for_theme(*theme)));
                     }
                 }
                 _ => {}

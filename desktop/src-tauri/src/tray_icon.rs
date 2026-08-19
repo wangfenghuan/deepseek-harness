@@ -17,15 +17,9 @@ pub fn icon_for_theme(theme: Theme) -> Image<'static> {
         // Light menu bar needs a dark glyph.
         _ => include_bytes!("../../assets/deepseek-black.png"),
     };
-    // Prefer a downscaled RGBA image; fall back to Tauri decoding the PNG
-    // directly if resizing fails for any reason.
-    image::load_from_memory(bytes)
-        .ok()
-        .map(|decoded| {
-            let resized =
-                decoded.resize(MENU_BAR_SIZE, MENU_BAR_SIZE, image::imageops::FilterType::Lanczos3);
-            let rgba = resized.into_rgba8();
-            Image::new_owned(rgba.into_raw(), MENU_BAR_SIZE, MENU_BAR_SIZE)
-        })
-        .unwrap_or_else(|| Image::from_bytes(bytes).expect("embedded tray PNG must decode"))
+    let decoded = image::load_from_memory(bytes).expect("embedded tray PNG must decode");
+    let resized =
+        decoded.resize(MENU_BAR_SIZE, MENU_BAR_SIZE, image::imageops::FilterType::Lanczos3);
+    let rgba = resized.into_rgba8();
+    Image::new_owned(rgba.into_raw(), MENU_BAR_SIZE, MENU_BAR_SIZE)
 }
