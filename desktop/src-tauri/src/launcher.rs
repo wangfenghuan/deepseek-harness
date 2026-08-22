@@ -96,10 +96,11 @@ impl Launcher {
         Ok(())
     }
 
-    /// Block until the dsh web readiness line appears, the child exits early,
-    /// or `timeout` elapses. Returns the served URL.
-    pub fn wait_ready(&self, timeout: Duration) -> Result<String, String> {
-        let deadline = std::time::Instant::now() + timeout;
+    /// Block until the dsh web readiness line appears or the child exits
+    /// early. There is no timeout: the first launch can take a long while
+    /// (npx downloading the dsh build), and a dead child is reported
+    /// immediately. Returns the served URL.
+    pub fn wait_ready(&self) -> Result<String, String> {
         loop {
             if let Some(url) = self.shared.lock().expect("shared lock").ready_url.clone() {
                 return Ok(url);
@@ -107,13 +108,6 @@ impl Launcher {
             if let Some(status) = self.exit_status() {
                 return Err(format!(
                     "dsh web exited early: {status}\n\n{}",
-                    self.log_tail(60)
-                ));
-            }
-            if std::time::Instant::now() >= deadline {
-                return Err(format!(
-                    "timed out waiting for the dsh web server after {}s\n\n{}",
-                    timeout.as_secs(),
                     self.log_tail(60)
                 ));
             }

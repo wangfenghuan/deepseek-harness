@@ -75,4 +75,4 @@ Open the settings window from the tray menu ("设置…") or the gear button on 
 ## Troubleshooting
 
 - A `failed to spawn npx` error means Node was not found on the probed paths; install Node or make it visible in `/opt/homebrew/bin` or `/usr/local/bin` (macOS) or on the user `PATH` (Windows).
-- A readiness timeout shows the captured server output on the error page; it usually means the dsh web profile failed to boot (check the `~/.dsh` logs) or the first npx download is still running.
+- The launcher waits as long as needed for the server (the first npx download can take a while); if the dsh web process exits early, the error page shows the captured output, which usually means the dsh web profile failed to boot (check the `~/.dsh` logs).

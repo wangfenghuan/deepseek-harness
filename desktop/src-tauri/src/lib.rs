@@ -13,7 +13,6 @@ mod process_impl_windows;
 mod tray_icon;
 
 use std::sync::Arc;
-use std::time::Duration;
 use tauri::{
     menu::{Menu, MenuItem},
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
@@ -24,10 +23,6 @@ use tauri::Theme;
 
 use launcher::Launcher;
 use settings::{Settings, SettingsStore};
-
-/// How long to wait for the dsh web server to become ready. The first run also
-/// downloads `@deepseek-ai/dsh` through npx, which can take a while.
-const READY_TIMEOUT: Duration = Duration::from_secs(180);
 
 pub fn run() {
     tauri::Builder::default()
@@ -204,7 +199,9 @@ pub fn run() {
                 }
 
                 // ---- Step 3: wait for the server then navigate ----
-                match launcher.wait_ready(READY_TIMEOUT) {
+                // No timeout: the first launch downloads the dsh build through
+                // npx and can take a while; a dead child reports immediately.
+                match launcher.wait_ready() {
                     Ok(url) => match url.parse() {
                         Ok(parsed) => {
                             if let Some(w) = &window {

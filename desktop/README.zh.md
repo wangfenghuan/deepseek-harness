@@ -69,4 +69,4 @@ Windows 上同样的命令会生成 `src-tauri\target\release\bundle\msi\*.msi` 
 ## 故障排查
 
 - 报 `failed to spawn npx` 说明在探测路径里没找到 Node；安装 Node，或让它出现在 `/opt/homebrew/bin`、`/usr/local/bin`（macOS）或用户 `PATH`（Windows）。
-- 就绪超时会在错误页展示捕获到的服务输出，通常是 dsh web profile 启动失败（查看 `~/.dsh` 日志）或首次 npx 下载仍在进行。
+- 启动器不限时等待服务就绪（首次 npx 下载可能较久）；如果 dsh web 进程提前退出，错误页会展示捕获到的输出，通常是 dsh web profile 启动失败（查看 `~/.dsh` 日志）。
