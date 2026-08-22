@@ -129,7 +129,6 @@ pub fn run() {
 
             let app_handle = app.handle().clone();
             let system_path = node_path::candidate_path_string();
-            let auto_update = app_handle.state::<SettingsStore>().get().auto_update;
 
             // Kick off the bootstrap on a background thread so the UI stays
             // responsive during the (potentially multi-second) download.
@@ -195,7 +194,7 @@ pub fn run() {
                     format!("{node_dir}{sep}{system_path}")
                 };
 
-                if let Err(e) = launcher.start(&launch_path, auto_update) {
+                if let Err(e) = launcher.start(&launch_path) {
                     status_window(
                         &window,
                         &format!("启动失败：{e}\n\n请确认已安装 Node.js ≥ 22（含 npx）。"),

@@ -68,31 +68,21 @@ impl Launcher {
     }
 
     /// Spawn the dsh web server as a child with the given `PATH`, cwd set to
-    /// the user's home, and telemetry off. When `use_latest` is set, npx
-    /// resolves `@deepseek-ai/dsh@latest` on every launch and installs a newer
-    /// build when one exists; otherwise it reuses the npx cache. Either way
-    /// the command is `npx --yes <spec> web --host 127.0.0.1 --port 0`.
-    pub fn start(&self, path: &str, use_latest: bool) -> Result<(), String> {
-        let spec = if use_latest {
-            "@deepseek-ai/dsh@latest"
-        } else {
-            "@deepseek-ai/dsh"
-        };
-        let args = [
-            "--yes",
-            spec,
-            "web",
-            "--host",
-            "127.0.0.1",
-            "--port",
-            "0",
-        ];
+    /// the user's home, telemetry off, and stdin closed so npx never blocks on
+    /// an interactive install prompt. The command is the official
+    /// `npx @deepseek-ai/dsh web` plus `--no-open` (which stops the CLI from
+    /// opening the system browser — the launcher shows the UI in its own
+    /// window instead). npx runs the cached version when one is present and
+    /// downloads the latest only when the cache is empty.
+    pub fn start(&self, path: &str) -> Result<(), String> {
+        let args = ["@deepseek-ai/dsh", "web", "--no-open"];
         let cwd = env_home();
         let mut command = process_impl::new_command(&args);
         command
             .current_dir(&cwd)
             .env("PATH", path)
             .env("DSH_TELEMETRY_DISABLED", "1")
+            .stdin(Stdio::null())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped());
         let mut child = command

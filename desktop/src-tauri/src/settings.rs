@@ -1,6 +1,5 @@
-//! Persisted user settings for the launcher UI: theme preference and the
-//! auto-update toggle that decides whether npx installs the latest dsh build
-//! or reuses its cache. Stored as JSON in the app config directory.
+//! Persisted user settings for the launcher UI: the theme preference for the
+//! launcher's own windows. Stored as JSON in the app config directory.
 
 use std::fs;
 use std::path::PathBuf;
@@ -22,10 +21,6 @@ pub enum ThemePreference {
 /// User-facing settings, persisted to `settings.json`.
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct Settings {
-    /// When true, npx resolves `@deepseek-ai/dsh@latest` on every launch and
-    /// installs a newer build when one exists; when false, npx reuses its
-    /// cached version without checking for updates.
-    pub auto_update: bool,
     /// Theme for the launcher's own windows (splash + settings).
     pub theme: ThemePreference,
 }
@@ -33,7 +28,6 @@ pub struct Settings {
 impl Default for Settings {
     fn default() -> Self {
         Self {
-            auto_update: true,
             theme: ThemePreference::System,
         }
     }

@@ -11,7 +11,7 @@
 ## 工作原理
 
 1. Rust 核心重建包含常见 Node 位置的 `PATH`（macOS：`/opt/homebrew/bin`、`/usr/local/bin`、nvm、volta、fnm、mise、`~/.local/bin`），因为从 Finder 启动的 GUI 应用只继承最简 `PATH`；Windows GUI 应用继承完整用户 `PATH`，直接使用。
-2. 它启动子进程 `npx --yes @deepseek-ai/dsh@latest web --host 127.0.0.1 --port 0`（Windows 上经 `cmd /C`），`cwd` 设为用户主目录，并设置 `DSH_TELEMETRY_DISABLED=1`。`--port 0` 让操作系统分配空闲端口。自动更新开启（默认）时 npx 解析 `latest` 标签，有新版本就安装；关闭时用不带版本的 `@deepseek-ai/dsh`，npx 直接复用缓存（见[设置](#设置)）。
+2. 它启动官方命令 `npx @deepseek-ai/dsh web --no-open` 作为子进程（Windows 上经 `cmd /C`），`cwd` 设为用户主目录，设置 `DSH_TELEMETRY_DISABLED=1`，并关闭 stdin（这样 npx 首次安装时不会阻塞在交互确认）。`--no-open` 让 `dsh web` 不打开系统浏览器——界面显示在启动器自己的窗口里。npx 有缓存就用缓存版本，缓存为空时才下载最新版；`dsh web` 默认绑定 `127.0.0.1` 的默认端口。
 3. CLI 会打印就绪行 `dsh web: http://127.0.0.1:<port>`；启动器解析它并把窗口导航到该地址。
 4. 关窗或退出时，启动器回收整个子进程树（macOS：向进程组发送 `SIGTERM`，5 秒后升级为 `SIGKILL`；Windows：`taskkill /T /F`）。进程退出后端口自动释放。
 5. 同一时间只运行一个实例：再次启动应用（再次双击 `.app`/`.exe`）只会把已有窗口带到前台，不会另起一个进程、也不会再起一个 npx 侧车。
@@ -59,7 +59,6 @@ Windows 上同样的命令会生成 `src-tauri\target\release\bundle\msi\*.msi` 
 从托盘菜单（「设置…」）或启动页右上角的齿轮按钮打开设置窗口。设置持久化到应用配置目录下的 `settings.json`。
 
 - **主题** — 跟随系统 / 深色 / 浅色。作用于启动器自己的窗口（启动页与设置窗口）；dsh web 界面保持它自己的主题。
-- **自动更新** — 开启（默认）时每次启动都通过 npx 解析 `@deepseek-ai/dsh@latest`，有新版本就安装；关闭时 npx 使用缓存版本。改动在下次启动时生效。
 - **运行日志** — 设置窗口展示捕获到的 dsh 侧车输出（自动刷新的最近日志），带刷新与复制按钮，方便排障。
 
 ## 体积

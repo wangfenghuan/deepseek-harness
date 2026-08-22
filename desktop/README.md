@@ -11,7 +11,7 @@ The launcher wraps the already-installed dsh CLI — it does **not** bundle Node
 ## How it works
 
 1. The Rust core rebuilds a `PATH` that includes common Node locations (macOS: `/opt/homebrew/bin`, `/usr/local/bin`, nvm, volta, fnm, mise, `~/.local/bin`), because Finder-launched GUI apps inherit only a minimal `PATH`; Windows GUI apps inherit the full user `PATH` and are used as-is.
-2. It spawns `npx --yes @deepseek-ai/dsh@latest web --host 127.0.0.1 --port 0` as a child (`cmd /C` on Windows) with `cwd` set to the user's home and `DSH_TELEMETRY_DISABLED=1`. `--port 0` lets the OS assign a free port. With auto-update enabled (the default) npx resolves the `latest` tag and installs a newer build when one exists; with auto-update off it uses the plain `@deepseek-ai/dsh` spec, so npx reuses its cached version (see [Settings](#settings)).
+2. It spawns the official `npx @deepseek-ai/dsh web --no-open` as a child (`cmd /C` on Windows) with `cwd` set to the user's home, `DSH_TELEMETRY_DISABLED=1`, and stdin closed (so npx never blocks on an install prompt). `--no-open` stops `dsh web` from opening the system browser — the launcher shows the UI in its own window instead. npx runs the cached version when one is present and downloads the latest only when the cache is empty; `dsh web` binds to `127.0.0.1` on its default port.
 3. The CLI prints a readiness line `dsh web: http://127.0.0.1:<port>`; the launcher parses it and navigates the window to that URL.
 4. On window close or app exit the launcher recycles the child process tree (macOS: `SIGTERM` to the process group, `SIGKILL` after 5 seconds; Windows: `taskkill /T /F`). The port is released when the process dies.
 5. Only one app instance runs at a time: launching the app again (double-clicking the `.app`/`.exe` a second time) focuses the existing window instead of spawning another process and another npx sidecar.
@@ -65,7 +65,6 @@ On Windows the same commands produce `src-tauri\target\release\bundle\msi\*.msi`
 Open the settings window from the tray menu ("设置…") or the gear button on the launch page. Settings persist to `settings.json` in the app config directory.
 
 - **Theme** — 跟随系统 / 深色 / 浅色 (follow system / dark / light). Applies to the launcher's own windows (the splash page and the settings window); the dsh web app keeps its own theme.
-- **Auto update** — when on (default), every launch resolves `@deepseek-ai/dsh@latest` through npx and installs a newer build when one exists; when off, npx reuses its cached version. The change takes effect on the next launch.
 - **运行日志** — the settings window shows the captured dsh sidecar output (the latest lines, refreshed automatically) with refresh/copy buttons, for troubleshooting.
 
 ## Sizes
